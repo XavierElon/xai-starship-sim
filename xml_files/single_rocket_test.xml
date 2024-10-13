@@ -30,9 +30,18 @@
 
             <!-- Thruster site -->
             <site name="thruster_site" pos="0 0 -1.2" size="0.05" rgba="1 0 0 1"/>
+            <site name="gyro_site" pos="0 0 0" size="0.15"/>
         </body>
     </worldbody>
-
+    <!-- Sensors for position, orientation, and angular velocity -->
+    <!-- Sensors attached directly to the rocket body -->
+    <sensor>
+        <framepos name="rocket_position" objtype="body" objname="rocket"/>
+        <framequat name="rocket_orientation" objtype="body" objname="rocket"/>
+        <gyro name="rocket_gyro" site="gyro_site"/>
+        <framelinvel name="rocket_velocity" objtype="body" objname="rocket"/>
+        <frameangvel name="rocket_angular_velocity" objtype="body" objname="rocket"/>
+    </sensor>
     <!-- Actuators with increased power -->
     <actuator>
         <motor name="thrust_z" site="thruster_site" gear="0 0 300 0 0 0" ctrllimited="true" ctrlrange="0 1"/>
