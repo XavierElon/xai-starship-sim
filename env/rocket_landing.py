@@ -14,19 +14,7 @@ DEFAULT_CAMERA_CONFIG = {
     "azimuth": 0,
 }
 
-
-def quaternion_to_euler(quaternion):
-    # Extract the values from the numpy array
-    w, x, y, z = quaternion
-
-    # Roll (X-axis rotation)
-    roll = math.atan2(2 * (w * x + y * z), 1 - 2 * (x**2 + y**2))
-
-    # Pitch (Y-axis rotation)
-    pitch = math.asin(2 * (w * y - z * x))
-
-    return roll, pitch
-
+import os
 
 class RocketLander(MujocoEnv):
     metadata = {
@@ -45,8 +33,9 @@ class RocketLander(MujocoEnv):
         reset_noise_scale: float = 0.01,
         **kwargs,
     ):  
+        os.chdir(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+        print(os.getcwd())
         xml_path = "./env/xml_files/single_rocket_test.xml"
-
         # RunAway-v0 state: left_motor_angle, right_motor_angle , pitch, roll, dist
         observation_space = Box(low=-np.inf, high=np.inf, shape=(13,), dtype=np.float32)
 
@@ -136,6 +125,9 @@ class RocketLander(MujocoEnv):
 
         if z < 5.0 and abs(rocket_gyro[-1]) > 15:
             return True
+        
+        else:
+            return False
 
     def _compute_reward(self):
         target_position = np.array(self.target_position)
@@ -147,8 +139,8 @@ class RocketLander(MujocoEnv):
 
         # Calculate velocity magnitude
         velocity_magnitude = np.linalg.norm(current_velocity)
-        print("vel_mag", velocity_magnitude)
-        print("distance error", distance_to_target)
+        # print("vel_mag", velocity_magnitude)
+        # print("distance error", distance_to_target)
         # Define reward: closer to target and lower velocity yields higher reward
         reward = -distance_to_target - self.velocity_param * velocity_magnitude  # Negative because we want to minimize these values
 
