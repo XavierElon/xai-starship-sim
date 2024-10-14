@@ -1,5 +1,9 @@
 torchrl
 tensordict
 mujoco
-gymnasium
+gymnasium==0.29.1
 imageio
+hydra-core
+wandb
+tdqm
+torchvision==0.19.1
