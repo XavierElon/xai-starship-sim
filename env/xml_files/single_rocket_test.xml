@@ -1,5 +1,5 @@
 <mujoco model="rocket_simulation">
-    <option timestep="0.0005"/> <!-- 0.005 showed learning. default 0.002-->
+    <option timestep="0.005"/> <!-- 0.005 showed learning. default 0.002-->
 
     <!-- Assets -->
     <asset>
