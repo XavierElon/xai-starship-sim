@@ -23,7 +23,7 @@ class RocketLander(MujocoEnv):
             "rgb_array",
             "depth_array",
         ],
-        "render_fps": 400,  # usually 20
+        "render_fps": 40,  # usually 20
     }
 
     def __init__(
@@ -36,7 +36,6 @@ class RocketLander(MujocoEnv):
         os.chdir(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
         print(os.getcwd())
         xml_path = "./env/xml_files/single_rocket_test.xml"
-        # RunAway-v0 state: left_motor_angle, right_motor_angle , pitch, roll, dist
         observation_space = Box(low=-np.inf, high=np.inf, shape=(13,), dtype=np.float32)
 
         self.max_episode_length = max_episode_length
@@ -108,12 +107,12 @@ class RocketLander(MujocoEnv):
 
     def _get_obs(self):
         # position data (7,)
-        pos = self.data.qpos
+        #pos = self.data.qpos
         # vel data (6,)
-        vel = self.data.qvel
+        #vel = self.data.qvel
 
-        rocket_angular_velocity = self.data.sensor("rocket_angular_velocity").data
-        rocket_gyro = self.data.sensor("rocket_gyro").data
+        #rocket_angular_velocity = self.data.sensor("rocket_angular_velocity").data
+        #rocket_gyro = self.data.sensor("rocket_gyro").data
 
         #roll, pitch = quaternion_to_euler(quat)
 
