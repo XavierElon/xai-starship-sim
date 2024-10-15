@@ -7,3 +7,4 @@ hydra-core
 wandb
 tdqm
 torchvision==0.19.1
+moviepy
