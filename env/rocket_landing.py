@@ -1,6 +1,6 @@
 import math
 from typing import Dict, Optional, Tuple, Union
-
+import numpy as np
 import mujoco
 
 import numpy as np
@@ -9,7 +9,7 @@ from gymnasium.spaces import Box
 
 DEFAULT_CAMERA_CONFIG = {
     "elevation": -30,
-    "distance": 50,
+    "distance": 40,
     "lookat": [0, 0, 5],
     "azimuth": 0,
 }
@@ -82,7 +82,8 @@ class RocketLander(MujocoEnv):
 
         ob = self.reset_model()
         info = self._get_reset_info()
-
+        self.last_action = np.zeros([3])
+        self.last_distance = 25 # depending on the starting hight in the xml!
         if self.render_mode == "human":
             self.render()
         return ob, info
@@ -129,23 +130,86 @@ class RocketLander(MujocoEnv):
             return False
 
     def _compute_reward(self):
-        target_position = np.array(self.target_position)
-        current_position = self.data.qpos[:3]  # Assuming the first three elements are x, y, z
-        current_velocity = self.data.qvel[:3]  # Assuming the first three elements are vx, vy, vz
+            target_position = np.array(self.target_position)
+            current_position = self.data.qpos[:3]
+            current_velocity = self.data.qvel[:3]
+            orientation = self.data.qpos[3:7]  # Assuming quaternion representation
 
-        # Calculate distance to target
-        distance_to_target = np.linalg.norm(current_position - target_position)
 
-        # Calculate velocity magnitude
-        velocity_magnitude = np.linalg.norm(current_velocity)
-        # print("vel_mag", velocity_magnitude)
-        # print("distance error", distance_to_target)
-        # Define reward: closer to target and lower velocity yields higher reward
-        reward = -distance_to_target - self.velocity_param * velocity_magnitude  # Negative because we want to minimize these values
+            # Distance to target
+            distance_to_target = np.linalg.norm(current_position - target_position)
+            
+            # Velocity magnitude
+            velocity_magnitude = np.linalg.norm(current_velocity)
+            
+            # Orientation penalty
+            roll, pitch, yaw = quaternion_to_euler(orientation)
+            orientation_penalty = np.sqrt(roll**2 + pitch**2)  # Penalize deviation from upright
+            
+            # Soft landing reward
+            soft_landing_reward = np.exp(-10 * np.abs(current_velocity[2]))  # Vertical velocity
+            
+            # Fuel efficiency (penalize actions)
+            fuel_penalty = np.sum(np.abs(self.last_action)) if hasattr(self, 'last_action') else 0
+            
+            # Progress reward
+            progress_reward = self.last_distance - distance_to_target if hasattr(self, 'last_distance') else 0
+            
+            # Compute reward
+            reward = (
+                -0.1 * distance_to_target
+                - 0.01 * velocity_magnitude
+                - 0.1 * orientation_penalty
+                + 0.5 * soft_landing_reward
+                - 0.01 * fuel_penalty
+                + 0.1 * progress_reward
+            )
+            
+            # Terminal rewards
+            if self._is_success(distance_to_target, velocity_magnitude, orientation_penalty):
+                reward += 100  # Big bonus for successful landing
+            elif self._is_crash():
+                reward -= 100  # Big penalty for crashing
 
-        done = self._done_state()
-        return reward, done
+            # Update last distance for next step
+            self.last_distance = distance_to_target
+            
+            done = self._done_state()
+            return reward, done
 
+    def _is_success(self, distance, velocity, orientation_penalty):
+        return distance < 0.1 and velocity < 0.1 and orientation_penalty < 0.1
+
+    def _is_crash(self):
+        return self.data.qpos[2] < 0.1 and np.linalg.norm(self.data.qvel) > 1.0
+
+def quaternion_to_euler(q):
+    """
+    Convert a quaternion to Euler angles (roll, pitch, yaw).
+    :param q: A numpy array containing the quaternion (w, x, y, z)
+    :return: A numpy array containing the Euler angles in radians (roll, pitch, yaw)
+    """
+    # Extract the values from q
+    w, x, y, z = q
+
+    # Roll (x-axis rotation)
+    sinr_cosp = 2 * (w * x + y * z)
+    cosr_cosp = 1 - 2 * (x * x + y * y)
+    roll = np.arctan2(sinr_cosp, cosr_cosp)
+
+    # Pitch (y-axis rotation)
+    sinp = 2 * (w * y - z * x)
+    if abs(sinp) >= 1:
+        pitch = np.copysign(np.pi / 2, sinp)  # Use 90 degrees if out of range
+    else:
+        pitch = np.arcsin(sinp)
+
+    # Yaw (z-axis rotation)
+    siny_cosp = 2 * (w * z + x * y)
+    cosy_cosp = 1 - 2 * (y * y + z * z)
+    yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+    return np.array([roll, pitch, yaw])
 
 if __name__ == "__main__":
     env = RocketLander(render_mode="human")

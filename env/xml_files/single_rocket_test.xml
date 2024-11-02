@@ -42,8 +42,8 @@
     </sensor>
     <!-- Actuators with increased power -->
     <actuator>
-        <motor name="thrust_z" site="thruster_site" gear="0 0 300 0 0 0" ctrllimited="true" ctrlrange="0 1"/>
-        <motor name="thrust_x" site="thruster_site" gear="100 0 0 0 0 0" ctrllimited="true" ctrlrange="-1 1"/>
-        <motor name="thrust_y" site="thruster_site" gear="0 100 0 0 0 0" ctrllimited="true" ctrlrange="-1 1"/>
+        <motor name="thrust_z" site="thruster_site" gear="0 0 500 0 0 0" ctrllimited="true" ctrlrange="0 1"/>
+        <motor name="thrust_x" site="thruster_site" gear="300 0 0 0 0 0" ctrllimited="true" ctrlrange="-1 1"/>
+        <motor name="thrust_y" site="thruster_site" gear="0 300 0 0 0 0" ctrllimited="true" ctrlrange="-1 1"/>
     </actuator>
 </mujoco>

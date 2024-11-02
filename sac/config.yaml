@@ -50,5 +50,5 @@ logger:
   group_name: null
   exp_name: ${env.name}_SAC
   mode: online
-  eval_iter: 10000
+  eval_iter: 20000
   video: True
