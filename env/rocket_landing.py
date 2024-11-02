@@ -89,6 +89,10 @@ class RocketLander(MujocoEnv):
         return ob, info
 
     def step(self, action):
+        print("Angular VEL", np.round(self.data.qvel[3:], 1))
+        print("Vel ", np.round(self.data.qvel[3:], 1))
+        print("POS", np.round(self.data.qpos[0:3], 1))
+        print("----"*2 + "\n")
         self.current_step += 1
         truncated = False
         truncated = self.current_step >= self.max_episode_length
@@ -175,6 +179,7 @@ class RocketLander(MujocoEnv):
             self.last_distance = distance_to_target
             
             done = self._done_state()
+            print("DONE: ", done)
             return reward, done
 
     def _is_success(self, distance, velocity, orientation_penalty):
@@ -212,20 +217,20 @@ def quaternion_to_euler(q):
     return np.array([roll, pitch, yaw])
 
 if __name__ == "__main__":
-    env = RocketLander(render_mode="human")
+    env = RocketLander(render_mode="rgb_image", reset_noise_scale=0.0)
     env.reset()
-    for i in range(1000):
-        action = np.array([0.0, 0., 0.4])
+    for i in range(400):
+        action = np.array([0.0, 0.0, 0.0])  # (x, y, z)
         observation, reward, terminated, truncated, info = env.step(
             action
         )  # env.action_space.sample()
         # print("\naction: ", action, "     reward: ", reward)
         round_obs = [round(obs, 2) for obs in observation]
-        print("observation", round_obs)
-        print("reward", reward)
-        env.render()
-        print("Environment step: ", i)
-        print("terminated: ", terminated)
+        #print("observation", round_obs)
+        #print("reward", reward)
+        #env.render()
+        #print("Environment step: ", i)
+        #print("terminated: ", terminated)
         if terminated:
             break
     env.close()
