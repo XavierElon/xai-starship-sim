@@ -140,7 +140,8 @@ class RocketLander(MujocoEnv):
 
         return np.concatenate([pos, roll, pitch, yaw, vel, angular_vel, distance])
 
-    def _compute_done(self, state)
+    def _compute_done(self, state):
+        return None
 
     def _compute_reward(self):
         reward = 0
