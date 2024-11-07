@@ -144,9 +144,10 @@ class RocketLander(MujocoEnv):
         return np.concatenate([pos, roll, pitch, yaw, vel, angular_vel, distance])
 
     def _compute_done(self, state):
-        if state == np.array(
-            [0.0, 0.0, 1.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        ):
+        target_state = np.array([0.0, 0.0, 1.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        tolerance = 1e-2  # Define a tolerance level
+
+        if np.allclose(state, target_state, atol=tolerance):
             return True
         else:
             return False
