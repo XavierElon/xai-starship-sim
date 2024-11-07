@@ -146,9 +146,23 @@ class RocketLander(MujocoEnv):
     def _compute_done(self, state):
         target_state = np.array([0.0, 0.0, 1.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         tolerance = 1e-2  # Define a tolerance level
+        pos_x, pos_y, pos_z, roll, pitch, yaw, vel_x, vel_y, vel_z, angular_vel_x, angular_vel_y, angular_vel_z, distance = state
 
         if np.allclose(state, target_state, atol=tolerance):
             return True
+        
+        # check if crashed
+        elif pos_z < 0.5:
+            return True
+        
+        # check if rolled over
+        elif abs(roll) > 70:
+            return True
+        
+        # check if pitched over
+        elif abs(pitch) > 70:
+            return True
+
         else:
             return False
 
