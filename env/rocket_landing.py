@@ -1,6 +1,6 @@
 import math
 from typing import Dict, Optional, Tuple, Union
-import numpy as np
+
 import mujoco
 
 import numpy as np
@@ -16,12 +16,13 @@ DEFAULT_CAMERA_CONFIG = {
 
 import os
 
+
 class RocketLander(MujocoEnv):
     """
-    
+
     Observation is: np.concatenate([pos, roll, pitch, yaw, vel, angular_vel, distance])
 
-    Target state is: 
+    Target state is:
 
     Angular VEL [0. 0. 0.]
     Vel  [0. 0. 0.]
@@ -30,8 +31,9 @@ class RocketLander(MujocoEnv):
     Goal distance  0.0
 
 
-    
+
     """
+
     metadata = {
         "render_modes": [
             "human",
@@ -48,8 +50,8 @@ class RocketLander(MujocoEnv):
         reset_noise_scale: float = 0.01,
         verbose: int = 0,
         **kwargs,
-    ):  
-        os.chdir(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+    ):
+        os.chdir(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
         print(os.getcwd())
         xml_path = "./env/xml_files/single_rocket_test.xml"
         observation_space = Box(low=-np.inf, high=np.inf, shape=(13,), dtype=np.float32)
@@ -99,7 +101,7 @@ class RocketLander(MujocoEnv):
         ob = self.reset_model()
         info = self._get_reset_info()
         self.last_action = np.zeros([3])
-        self.last_distance = 25 # depending on the starting hight in the xml!
+        self.last_distance = 50  # depending on the starting hight in the xml!
         if self.render_mode == "human":
             self.render()
         return ob, info
@@ -110,7 +112,8 @@ class RocketLander(MujocoEnv):
         truncated = self.current_step >= self.max_episode_length
         self.do_simulation(action, self.frame_skip)
         next_observation = self._get_obs()
-        reward, done = self._compute_reward()
+        reward = self._calculate_reward(next_observation)
+        done = self._compute_done(next_observation)
 
         if self.render_mode == "human":
             self.render()
@@ -134,25 +137,80 @@ class RocketLander(MujocoEnv):
             print("Angular VEL", np.round(angular_vel, 2))
             print("Vel ", np.round(vel, 2))
             print("POS", np.round(pos, 2))
-            print("R-P-Y ", round(roll, 2), round(pitch, 2), round(yaw, 2))
+            print("R-P-Y ", np.round(roll, 2), np.round(pitch, 2), np.round(yaw, 2))
             print("Goal distance ", np.round(distance, 2))
-            print("----"*2 + "\n")
+            print("----" * 2 + "\n")
 
         return np.concatenate([pos, roll, pitch, yaw, vel, angular_vel, distance])
 
     def _compute_done(self, state):
-        return None
+        if state == np.array([0.0, 0.0, 1.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]):
+            return True
+        else:
+            return False
 
-    def _compute_reward(self):
-        reward = 0
-        done = False
-        return reward, done
+    def _calculate_reward(self, state):
+        """
+        Calculate the reward for the current rocket state.
+
+        Parameters:
+        state (np.ndarray): Current state of the rocket [pos_x, pos_y, pos_z, roll, pitch, yaw, vel_x, vel_y, vel_z, angular_vel_x, angular_vel_y, angular_vel_z, distance]
+
+        Returns:
+        float: The calculated reward
+        """
+        (
+            pos_x,
+            pos_y,
+            pos_z,
+            roll,
+            pitch,
+            yaw,
+            vel_x,
+            vel_y,
+            vel_z,
+            angular_vel_x,
+            angular_vel_y,
+            angular_vel_z,
+            distance,
+        ) = state
+
+        # Calculate position reward
+        pos_reward = (
+            1 - np.sqrt(pos_x**2 + pos_y**2) / 10
+        )  # Reward for horizontal position, maximum of 1
+        pos_reward += (
+            1 - abs(pos_z - 1.02) / 1.02
+        )  # Reward for vertical position, maximum of 1
+
+        # Calculate orientation reward
+        orientation_reward = 1 - (abs(roll) + abs(pitch) + abs(yaw)) / (3 * np.pi)
+
+        # Calculate velocity reward
+        vel_reward = 1 - np.sqrt(vel_x**2 + vel_y**2 + vel_z**2) / 10
+        angular_vel_reward = (
+            1 - np.sqrt(angular_vel_x**2 + angular_vel_y**2 + angular_vel_z**2) / 10
+        )
+
+        # Calculate distance reward
+        distance_reward = 1 - distance / 10
+
+        # Combine all rewards
+        total_reward = (
+            pos_reward
+            + orientation_reward
+            + vel_reward
+            + angular_vel_reward
+            + distance_reward
+        )
+
+        return total_reward
 
 
 def quaternion_to_euler(q):
     """
     Convert a quaternion to Euler angles (roll, pitch, yaw).
-    
+
     Parameters:
     q (array-like): A list or numpy array containing the quaternion [w, x, y, z].
 
@@ -186,8 +244,9 @@ def quaternion_to_euler(q):
 
     return np.array([roll_deg]), np.array([pitch_deg]), np.array([yaw_deg])
 
+
 if __name__ == "__main__":
-    env = RocketLander(render_mode="rgb_image", reset_noise_scale=0.0)
+    env = RocketLander(render_mode="rgb_image", reset_noise_scale=0.01, verbose=1)
     env.reset()
     for i in range(100):
         action = np.array([0.0, 0.0, 0.0])  # (x, y, z)
@@ -195,11 +254,11 @@ if __name__ == "__main__":
             action
         )  # env.action_space.sample()
         # print("\naction: ", action, "     reward: ", reward)
-        #print("observation", round_obs)
-        #print("reward", reward)
-        #env.render()
-        #print("Environment step: ", i)
-        #print("terminated: ", terminated)
+        # print("observation", round_obs)
+        # print("reward", reward)
+        # env.render()
+        # print("Environment step: ", i)
+        # print("terminated: ", terminated)
         if terminated:
             break
     env.close()

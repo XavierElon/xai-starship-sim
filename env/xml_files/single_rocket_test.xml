@@ -24,7 +24,7 @@
         <geom name="target_x2" type="box" size="0.05 0.5 0.01" pos="0 0 0.015" rgba="1 0 0 1"/>
 
         <!-- Rocket -->
-        <body name="rocket" pos="0 0 5.5">
+        <body name="rocket" pos="0 0 50">
             <geom name="rocket_body" type="cylinder" size="0.1 1" rgba="1 1 1 1" mass="10"/>
             <joint name="rocket_free" type="free"/>
 
