@@ -144,7 +144,9 @@ class RocketLander(MujocoEnv):
         return np.concatenate([pos, roll, pitch, yaw, vel, angular_vel, distance])
 
     def _compute_done(self, state):
-        if state == np.array([0.0, 0.0, 1.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]):
+        if state == np.array(
+            [0.0, 0.0, 1.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        ):
             return True
         else:
             return False
