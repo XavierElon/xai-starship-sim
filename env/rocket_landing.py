@@ -113,7 +113,7 @@ class RocketLander(MujocoEnv):
         self.do_simulation(action, self.frame_skip)
         next_observation = self._get_obs()
         reward = self._calculate_reward(next_observation)
-        done = self._compute_done(next_observation)
+        done, crash_report = self._compute_done(next_observation)
 
         if self.render_mode == "human":
             self.render()
@@ -122,7 +122,7 @@ class RocketLander(MujocoEnv):
             reward,
             done,
             truncated,
-            {},
+            {"crash_report": crash_report},
         )
 
     def _get_obs(self):
@@ -147,24 +147,28 @@ class RocketLander(MujocoEnv):
         target_state = np.array([0.0, 0.0, 1.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         tolerance = 1e-2  # Define a tolerance level
         pos_x, pos_y, pos_z, roll, pitch, yaw, vel_x, vel_y, vel_z, angular_vel_x, angular_vel_y, angular_vel_z, distance = state
-
+        crash_report = None
         if np.allclose(state, target_state, atol=tolerance):
-            return True
+            crash_report = 1
+            return True, crash_report
         
         # check if crashed
         elif pos_z < 0.5:
-            return True
+            crash_report = 2
+            return True, crash_report
         
         # check if rolled over
         elif abs(roll) > 70:
-            return True
+            crash_report = 3
+            return True, crash_report
         
         # check if pitched over
         elif abs(pitch) > 70:
-            return True
+            crash_report = 4
+            return True, crash_report
 
         else:
-            return False
+            return False, 0
 
     def _calculate_reward(self, state):
         """

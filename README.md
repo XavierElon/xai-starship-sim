@@ -1,6 +1,13 @@
 # spaceX
 
 
+## Create a training routine 
+Routine that increases the initial rocket starting hight.
+Starting at 5 once successfully trained go to 10 with the trained policy weights from 5 etc. 
+Training should be faster and with the initialized weights and we can scale over time. 
+
+
+
 # Setup
 
 ``` bash
