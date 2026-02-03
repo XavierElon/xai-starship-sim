@@ -7,6 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "torchrl>=0.6.0",
     "tensordict>=0.6.0",
+    "torchvision>=0.19.0",
     "mujoco>=3.2.0",
     "gymnasium>=1.0.0",
     "imageio>=2.36.0",
