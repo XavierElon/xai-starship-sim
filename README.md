@@ -10,11 +10,9 @@ Training should be faster and with the initialized weights and we can scale over
 
 # Setup
 
-``` bash
-conda create -n spaceX python=3.9
-```
-``` bash
-conda activate spaceX
+```bash
+uv sync
+source .venv/bin/activate
 ```
 
 # GL MuJoCo Error
