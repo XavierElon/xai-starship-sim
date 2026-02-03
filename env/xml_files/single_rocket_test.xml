@@ -6,6 +6,7 @@
         <texture name="checker" type="2d" builtin="checker" width="100" height="100" rgb1="0.2 0.2 0.2" rgb2="0.8 0.8 0.8"/>
         <material name="ground" texture="checker" texrepeat="20 20" reflectance="0.2"/>
         <material name="target_material" rgba="1 0 0 0.3"/>
+        <material name="rocket_body" rgba="1 1 1 1" emission="1"/>
     </asset>
     
     <!-- Worldbody -->
@@ -15,6 +16,7 @@
 
         <!-- Light Source -->
         <light name="light_source" pos="0 0 100" dir="0 0 -1" diffuse="1 1 1" />
+        <light name="ambient" pos="0 0 50" diffuse="0.3 0.3 0.3" ambient="0.2 0.2 0.2"/>
 
         <!-- Target Circle 
         <geom name="target_circle" type="cylinder" size="1 0.01" pos="0 0 0.01" material="target_material" rgba="1 1 1 1"/> -->
@@ -31,12 +33,15 @@
 
         <!-- Rocket -->
         <body name="rocket" pos="0 0 50">
-            <geom name="rocket_body" type="cylinder" size="0.1 1" rgba="1 1 1 1" mass="10"/>
+            <geom name="rocket_body" type="cylinder" size="0.1 1" material="rocket_body" mass="10"/>
             <joint name="rocket_free" type="free"/>
 
             <!-- Thruster site -->
             <site name="thruster_site" pos="0 0 -1" size="0.05" rgba="1 0 0 1"/>
             <site name="gyro_site" pos="0 0 0" size="0.1"/>
+
+            <!-- Spotlight on rocket (moves with it) -->
+            <light name="rocket_spot" pos="3 3 3" dir="-1 -1 -1" diffuse="0.8 0.8 0.8" specular="0.3 0.3 0.3" cutoff="60"/>
         </body>
     </worldbody>
     <!-- Actuators with increased power -->

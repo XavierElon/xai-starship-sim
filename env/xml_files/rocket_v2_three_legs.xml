@@ -5,9 +5,9 @@
         <texture name="checker" type="2d" builtin="checker" width="100" height="100" rgb1="0.2 0.2 0.2" rgb2="0.8 0.8 0.8"/>
         <material name="ground" texture="checker" texrepeat="20 20" reflectance="0.2"/>
         <material name="target_material" rgba="1 0 0 0.3"/>
-        <material name="rocket_body" rgba="0.95 0.95 0.95 1"/>
-        <material name="rocket_dark" rgba="0.2 0.2 0.2 1"/>
-        <material name="leg_material" rgba="0.3 0.3 0.3 1"/>
+        <material name="rocket_body" rgba="1 1 1 1" emission="1"/>
+        <material name="rocket_dark" rgba="0.3 0.3 0.3 1" emission="0.5"/>
+        <material name="leg_material" rgba="0.4 0.4 0.4 1" emission="0.5"/>
     </asset>
 
     <worldbody>
@@ -17,6 +17,7 @@
         <!-- Lights -->
         <light name="light_source" pos="0 0 100" dir="0 0 -1" diffuse="1 1 1"/>
         <light name="fill_light" pos="10 10 20" dir="-0.5 -0.5 -1" diffuse="0.5 0.5 0.5"/>
+        <light name="ambient" pos="0 0 50" diffuse="0.3 0.3 0.3" ambient="0.2 0.2 0.2"/>
 
         <!-- Target Circle -->
         <geom name="target_circle" type="cylinder" size="1.5 0.01" pos="0 0 0.01" material="target_material"/>
@@ -63,6 +64,9 @@
             <!-- Thruster site -->
             <site name="thruster_site" pos="0 0 -1.5" size="0.05" rgba="1 0.5 0 1"/>
             <site name="gyro_site" pos="0 0 0" size="0.1"/>
+
+            <!-- Spotlight on rocket (moves with it) -->
+            <light name="rocket_spot" pos="3 3 3" dir="-1 -1 -1" diffuse="0.8 0.8 0.8" specular="0.3 0.3 0.3" cutoff="60"/>
         </body>
     </worldbody>
 

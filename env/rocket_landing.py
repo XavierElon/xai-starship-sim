@@ -17,9 +17,9 @@ from env.rewards import RewardCalculator, RewardComponents
 
 
 DEFAULT_CAMERA_CONFIG = {
-    "elevation": -30,
-    "distance": 40,
-    "lookat": [0, 0, 5],
+    "elevation": -20,
+    "distance": 100,
+    "lookat": [0, 0, 25],
     "azimuth": 0,
 }
 
