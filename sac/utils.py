@@ -131,6 +131,9 @@ def env_maker(cfg, device="cpu", from_pixels=False):
             # Build environment kwargs from config
             env_kwargs = build_rocket_env_kwargs(cfg)
             env_kwargs["render_mode"] = "rgb_array"
+            # Smaller resolution for video (default 480x480 is too large)
+            env_kwargs["width"] = 256
+            env_kwargs["height"] = 256
 
             return GymWrapper(
                 RocketLander(**env_kwargs),

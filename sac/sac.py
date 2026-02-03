@@ -10,10 +10,14 @@ It supports state environments like MuJoCo.
 
 The helper functions are coded in the utils.py associated with this script.
 """
+import os
 import time
 from collections import defaultdict
 
 import hydra
+
+# Save original working directory before Hydra changes it
+_ORIGINAL_CWD = os.getcwd()
 
 import numpy as np
 import torch
@@ -88,6 +92,10 @@ def aggregate_episode_metrics(info_dicts):
 
 @hydra.main(version_base="1.1", config_path="", config_name="config")
 def main(cfg: "DictConfig"):  # noqa: F821
+    # Reset working directory to project root - Hydra changes it which breaks wandb video logging
+    project_root = os.path.dirname(_ORIGINAL_CWD) if _ORIGINAL_CWD.endswith('sac') else _ORIGINAL_CWD
+    os.chdir(project_root)
+
     device = cfg.network.device
     if device in ("", None):
         if torch.cuda.is_available():
@@ -276,6 +284,7 @@ def main(cfg: "DictConfig"):  # noqa: F821
             metrics_to_log["train/training_time"] = training_time
 
         # Evaluation
+        eval_video = None
         if abs(collected_frames % eval_iter) < frames_per_batch:
             with set_exploration_type(ExplorationType.DETERMINISTIC), torch.no_grad():
                 eval_start = time.time()
@@ -287,21 +296,20 @@ def main(cfg: "DictConfig"):  # noqa: F821
                 )
                 eval_time = time.time() - eval_start
                 eval_reward = eval_rollout["next", "reward"].sum(-2).mean().item()
+                # batch_size is [num_envs, timesteps] for rollout
+                eval_episode_length = eval_rollout.batch_size[-1]  # Get timesteps dimension
                 metrics_to_log["eval/reward"] = eval_reward
                 metrics_to_log["eval/time"] = eval_time
+                metrics_to_log["eval/episode_length"] = eval_episode_length
 
-                # Log video to wandb with correct step
+                # Prepare video for logging
+                eval_video = None
                 if cfg.logger.video and "pixels" in eval_rollout.keys():
-                    pixels = eval_rollout["pixels"].cpu().numpy()
-                    # pixels shape: [T, H, W, C] or [T, B, H, W, C]
+                    pixels = eval_rollout["pixels"]
+                    # pixels shape: [B, T, H, W, C] where B=num_envs, T=timesteps
                     if pixels.ndim == 5:
-                        pixels = pixels[:, 0]  # Take first env if batched
-                    # wandb expects [T, C, H, W]
-                    pixels = np.transpose(pixels, (0, 3, 1, 2))
-                    wandb.log(
-                        {"eval/video": wandb.Video(pixels, fps=20, format="mp4")},
-                        step=collected_frames,
-                    )
+                        pixels = pixels[0]  # Take first env -> [T, H, W, C]
+                    eval_video = pixels
 
                 # Log evaluation episode metrics if available
                 if "crash_report" in eval_rollout.keys():
@@ -334,6 +342,12 @@ def main(cfg: "DictConfig"):  # noqa: F821
 
         if logger is not None:
             log_metrics(logger, metrics_to_log, collected_frames)
+            # Log video directly with wandb - bypass TorchRL logger
+            if eval_video is not None:
+                vid = eval_video.cpu().numpy()
+                vid = np.transpose(vid, (0, 3, 1, 2))  # [T,H,W,C] -> [T,C,H,W]
+                vid = vid.astype(np.uint8)
+                wandb.log({"eval/video": wandb.Video(vid, fps=20, format="mp4")})
         sampling_start = time.time()
 
     collector.shutdown()
@@ -344,6 +358,10 @@ def main(cfg: "DictConfig"):  # noqa: F821
     end_time = time.time()
     execution_time = end_time - start_time
     torchrl_logger.info(f"Training took {execution_time:.2f} seconds to finish")
+
+    # Finish wandb run to ensure all media is synced
+    if logger is not None:
+        wandb.finish()
 
 
 if __name__ == "__main__":
