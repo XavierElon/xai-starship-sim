@@ -1,0 +1,74 @@
+<mujoco model="rocket_v2_three_legs">
+    <option timestep="0.005"/>
+
+    <asset>
+        <texture name="checker" type="2d" builtin="checker" width="100" height="100" rgb1="0.2 0.2 0.2" rgb2="0.8 0.8 0.8"/>
+        <material name="ground" texture="checker" texrepeat="20 20" reflectance="0.2"/>
+        <material name="target_material" rgba="1 0 0 0.3"/>
+        <material name="rocket_body" rgba="0.95 0.95 0.95 1"/>
+        <material name="rocket_dark" rgba="0.2 0.2 0.2 1"/>
+        <material name="leg_material" rgba="0.3 0.3 0.3 1"/>
+    </asset>
+
+    <worldbody>
+        <!-- Floor -->
+        <geom name="floor" type="plane" pos="0 0 0" size="20 20 0.1" material="ground"/>
+
+        <!-- Lights -->
+        <light name="light_source" pos="0 0 100" dir="0 0 -1" diffuse="1 1 1"/>
+        <light name="fill_light" pos="10 10 20" dir="-0.5 -0.5 -1" diffuse="0.5 0.5 0.5"/>
+
+        <!-- Target Circle -->
+        <geom name="target_circle" type="cylinder" size="1.5 0.01" pos="0 0 0.01" material="target_material"/>
+        <geom name="target_x1" type="box" size="0.75 0.05 0.01" pos="0 0 0.015" rgba="1 0 0 1"/>
+        <geom name="target_x2" type="box" size="0.05 0.75 0.01" pos="0 0 0.015" rgba="1 0 0 1"/>
+
+        <!-- Rocket Body -->
+        <body name="rocket" pos="0 0 50">
+            <joint name="rocket_free" type="free"/>
+
+            <!-- Main body -->
+            <geom name="rocket_body_main" type="cylinder" size="0.15 1.5" pos="0 0 0" material="rocket_body" mass="8"/>
+
+            <!-- Nose cone -->
+            <geom name="nose_cone" type="capsule" size="0.15 0.3" pos="0 0 1.8" material="rocket_body" mass="0.5"/>
+
+            <!-- Black interstage band -->
+            <geom name="interstage" type="cylinder" size="0.155 0.1" pos="0 0 0.8" material="rocket_dark" mass="0.1"/>
+
+            <!-- Engine section -->
+            <geom name="engine_section" type="cylinder" size="0.18 0.3" pos="0 0 -1.2" material="rocket_dark" mass="0.3"/>
+
+            <!-- Landing Leg 1: 0° (positive X) -->
+            <body name="leg1" pos="0.15 0 -1.3">
+                <geom name="leg1_upper" type="capsule" size="0.02 0.4" pos="0.25 0 0.15" euler="0 -50 0" material="leg_material" mass="0.12"/>
+                <geom name="leg1_lower" type="capsule" size="0.025 0.35" pos="0.55 0 -0.25" euler="0 -20 0" material="leg_material" mass="0.1"/>
+                <geom name="leg1_foot" type="sphere" size="0.06" pos="0.7 0 -0.55" material="leg_material" mass="0.05"/>
+            </body>
+
+            <!-- Landing Leg 2: 120° -->
+            <body name="leg2" pos="-0.075 0.13 -1.3" euler="0 0 120">
+                <geom name="leg2_upper" type="capsule" size="0.02 0.4" pos="0.25 0 0.15" euler="0 -50 0" material="leg_material" mass="0.12"/>
+                <geom name="leg2_lower" type="capsule" size="0.025 0.35" pos="0.55 0 -0.25" euler="0 -20 0" material="leg_material" mass="0.1"/>
+                <geom name="leg2_foot" type="sphere" size="0.06" pos="0.7 0 -0.55" material="leg_material" mass="0.05"/>
+            </body>
+
+            <!-- Landing Leg 3: 240° -->
+            <body name="leg3" pos="-0.075 -0.13 -1.3" euler="0 0 240">
+                <geom name="leg3_upper" type="capsule" size="0.02 0.4" pos="0.25 0 0.15" euler="0 -50 0" material="leg_material" mass="0.12"/>
+                <geom name="leg3_lower" type="capsule" size="0.025 0.35" pos="0.55 0 -0.25" euler="0 -20 0" material="leg_material" mass="0.1"/>
+                <geom name="leg3_foot" type="sphere" size="0.06" pos="0.7 0 -0.55" material="leg_material" mass="0.05"/>
+            </body>
+
+            <!-- Thruster site -->
+            <site name="thruster_site" pos="0 0 -1.5" size="0.05" rgba="1 0.5 0 1"/>
+            <site name="gyro_site" pos="0 0 0" size="0.1"/>
+        </body>
+    </worldbody>
+
+    <actuator>
+        <motor name="thrust_x" site="thruster_site" gear="25 0 0 0 0 0" ctrllimited="true" ctrlrange="-1 1"/>
+        <motor name="thrust_y" site="thruster_site" gear="0 25 0 0 0 0" ctrllimited="true" ctrlrange="-1 1"/>
+        <motor name="thrust_z" site="thruster_site" gear="0 0 200 0 0 0" ctrllimited="true" ctrlrange="0 1"/>
+    </actuator>
+</mujoco>
