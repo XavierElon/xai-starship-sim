@@ -3,6 +3,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import functools
+import os
+import sys
 
 import torch
 from tensordict.nn import InteractionType, TensorDictModule
@@ -36,6 +38,64 @@ import numpy as np
 # -----------------
 
 
+def build_rocket_env_kwargs(cfg):
+    """Build keyword arguments for RocketLander from Hydra config."""
+    env_kwargs = {}
+
+    # Rocket design
+    if hasattr(cfg.env, "rocket") and hasattr(cfg.env.rocket, "design"):
+        env_kwargs["rocket_design"] = cfg.env.rocket.design
+
+    # Domain randomization
+    if hasattr(cfg.env, "domain_randomization"):
+        dr_cfg = cfg.env.domain_randomization
+        domain_randomization = {
+            "enabled": getattr(dr_cfg, "enabled", False),
+        }
+        # Only include other params if enabled
+        if domain_randomization["enabled"]:
+            if hasattr(dr_cfg, "mass_range"):
+                domain_randomization["mass_range"] = tuple(dr_cfg.mass_range)
+            if hasattr(dr_cfg, "thrust_range"):
+                domain_randomization["thrust_range"] = tuple(dr_cfg.thrust_range)
+            if hasattr(dr_cfg, "gravity_range"):
+                domain_randomization["gravity_range"] = tuple(dr_cfg.gravity_range)
+            if hasattr(dr_cfg, "initial_height_range"):
+                domain_randomization["initial_height_range"] = tuple(
+                    dr_cfg.initial_height_range
+                )
+            if hasattr(dr_cfg, "initial_velocity_range"):
+                domain_randomization["initial_velocity_range"] = tuple(
+                    dr_cfg.initial_velocity_range
+                )
+            if hasattr(dr_cfg, "initial_orientation_range"):
+                domain_randomization["initial_orientation_range"] = tuple(
+                    dr_cfg.initial_orientation_range
+                )
+        env_kwargs["domain_randomization"] = domain_randomization
+
+    # Reward weights
+    if hasattr(cfg.env, "reward_weights"):
+        rw_cfg = cfg.env.reward_weights
+        reward_weights = {}
+        for key in [
+            "position",
+            "orientation",
+            "velocity",
+            "angular_velocity",
+            "distance",
+            "success_bonus",
+            "crash_penalty",
+            "tip_over_penalty",
+        ]:
+            if hasattr(rw_cfg, key):
+                reward_weights[key] = getattr(rw_cfg, key)
+        if reward_weights:
+            env_kwargs["reward_weights"] = reward_weights
+
+    return env_kwargs
+
+
 def env_maker(cfg, device="cpu", from_pixels=False):
     lib = cfg.env.library
     if lib in ("gym", "gymnasium"):
@@ -54,20 +114,26 @@ def env_maker(cfg, device="cpu", from_pixels=False):
             env, CatTensors(in_keys=env.observation_spec.keys(), out_key="observation")
         )
     elif lib == "custom":
-        # New condition for roboarm environment
         if cfg.env.name == "rocket_lander_v0":
-            import os
-            import sys
             cwd = os.getcwd()
             print(cwd)
-            root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
             sys.path.append(root_dir)
             print(sys.path)
-            from env.rocket_landing import RocketLander  # Adjust the import as necessary
+            from env.rocket_landing import RocketLander
             from torchrl.envs import GymWrapper
+
             from_pixels = True if cfg.logger.video else False
 
-            return GymWrapper(RocketLander(render_mode="rgb_array"), device=cfg.collector.device, from_pixels=from_pixels)
+            # Build environment kwargs from config
+            env_kwargs = build_rocket_env_kwargs(cfg)
+            env_kwargs["render_mode"] = "rgb_array"
+
+            return GymWrapper(
+                RocketLander(**env_kwargs),
+                device=cfg.collector.device,
+                from_pixels=from_pixels,
+            )
     else:
         raise NotImplementedError(f"Unknown lib {lib}.")
 

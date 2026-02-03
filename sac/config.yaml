@@ -7,6 +7,31 @@ env:
   max_episode_steps: 1000
   seed: 42
 
+  # Rocket design and configuration
+  rocket:
+    design: v0  # v0 (cylinder), v1 (two_legs), v2 (tripod)
+
+  # Domain randomization settings
+  domain_randomization:
+    enabled: false
+    mass_range: [0.8, 1.2]
+    thrust_range: [0.9, 1.1]
+    gravity_range: [9.0, 10.5]
+    initial_height_range: [40.0, 60.0]
+    initial_velocity_range: [-2.0, 2.0]
+    initial_orientation_range: [-5.0, 5.0]
+
+  # Reward weights for different components
+  reward_weights:
+    position: 1.0
+    orientation: 1.0
+    velocity: 1.0
+    angular_velocity: 1.0
+    distance: 1.0
+    success_bonus: 100.0
+    crash_penalty: -50.0
+    tip_over_penalty: -30.0
+
 # collector
 collector:
   total_frames: 1_000_000
@@ -52,3 +77,5 @@ logger:
   mode: online
   eval_iter: 20000
   video: True
+  log_reward_components: true
+  log_crash_breakdown: true
