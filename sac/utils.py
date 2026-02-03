@@ -46,6 +46,14 @@ def build_rocket_env_kwargs(cfg):
     if hasattr(cfg.env, "rocket") and hasattr(cfg.env.rocket, "design"):
         env_kwargs["rocket_design"] = cfg.env.rocket.design
 
+    # Termination conditions
+    if hasattr(cfg.env, "termination"):
+        term_cfg = cfg.env.termination
+        if hasattr(term_cfg, "max_distance"):
+            env_kwargs["max_distance"] = term_cfg.max_distance
+        if hasattr(term_cfg, "max_angle"):
+            env_kwargs["max_angle"] = term_cfg.max_angle
+
     # Domain randomization
     if hasattr(cfg.env, "domain_randomization"):
         dr_cfg = cfg.env.domain_randomization
@@ -115,15 +123,11 @@ def env_maker(cfg, device="cpu", from_pixels=False):
         )
     elif lib == "custom":
         if cfg.env.name == "rocket_lander_v0":
-            cwd = os.getcwd()
-            print(cwd)
             root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-            sys.path.append(root_dir)
-            print(sys.path)
+            if root_dir not in sys.path:
+                sys.path.append(root_dir)
             from env.rocket_landing import RocketLander
             from torchrl.envs import GymWrapper
-
-            from_pixels = True if cfg.logger.video else False
 
             # Build environment kwargs from config
             env_kwargs = build_rocket_env_kwargs(cfg)
@@ -132,7 +136,7 @@ def env_maker(cfg, device="cpu", from_pixels=False):
             return GymWrapper(
                 RocketLander(**env_kwargs),
                 device=cfg.collector.device,
-                from_pixels=from_pixels,
+                from_pixels=from_pixels,  # Use parameter, not cfg.logger.video
             )
     else:
         raise NotImplementedError(f"Unknown lib {lib}.")

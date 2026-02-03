@@ -60,6 +60,9 @@ class RocketLander(MujocoEnv):
         max_episode_length: int = 1000,
         reset_noise_scale: float = 0.01,
         verbose: int = 0,
+        # Termination conditions
+        max_distance: float = 20.0,
+        max_angle: float = 70.0,
         **kwargs,
     ):
         """
@@ -74,6 +77,8 @@ class RocketLander(MujocoEnv):
             max_episode_length: Maximum steps per episode
             reset_noise_scale: Scale of noise added to initial state
             verbose: Verbosity level (0=silent, 1=debug prints)
+            max_distance: Max horizontal distance from pad before termination
+            max_angle: Max roll/pitch angle before termination
             **kwargs: Additional arguments passed to MujocoEnv
         """
         # Build config from parameters if not provided
@@ -83,6 +88,8 @@ class RocketLander(MujocoEnv):
                 domain_randomization=domain_randomization,
                 reward_weights=reward_weights,
                 frame_skip=frame_skip,
+                max_distance=max_distance,
+                max_angle=max_angle,
                 max_episode_length=max_episode_length,
                 reset_noise_scale=reset_noise_scale,
                 verbose=verbose,
@@ -123,6 +130,8 @@ class RocketLander(MujocoEnv):
         max_episode_length: int,
         reset_noise_scale: float,
         verbose: int,
+        max_distance: float = 20.0,
+        max_angle: float = 70.0,
     ) -> RocketEnvConfig:
         """Build RocketEnvConfig from individual parameters."""
         # Domain randomization config
@@ -147,6 +156,8 @@ class RocketLander(MujocoEnv):
             frame_skip=frame_skip,
             reset_noise_scale=reset_noise_scale,
             verbose=verbose,
+            max_distance=max_distance,
+            max_angle=max_angle,
         )
 
     def _setup_from_config(self):
@@ -353,6 +364,10 @@ class RocketLander(MujocoEnv):
             distance,
         ) = state
 
+        max_angle = self.config.max_angle
+        max_distance = self.config.max_distance
+        horizontal_distance = np.sqrt(pos_x**2 + pos_y**2)
+
         crash_report = None
 
         if np.allclose(state, target_state, atol=tolerance):
@@ -365,13 +380,18 @@ class RocketLander(MujocoEnv):
             return True, crash_report
 
         # Check if rolled over
-        elif abs(roll) > 70:
+        elif abs(roll) > max_angle:
             crash_report = 3  # Roll over
             return True, crash_report
 
         # Check if pitched over
-        elif abs(pitch) > 70:
+        elif abs(pitch) > max_angle:
             crash_report = 4  # Pitch over
+            return True, crash_report
+
+        # Check if drifted too far from landing pad
+        elif horizontal_distance > max_distance:
+            crash_report = 5  # Out of bounds
             return True, crash_report
 
         else:

@@ -21,6 +21,11 @@ env:
     initial_velocity_range: [-0.5, 0.5]  # Small perturbations
     initial_orientation_range: [-2.0, 2.0]  # ±2° tilt
 
+  # Termination conditions
+  termination:
+    max_distance: 20.0    # Max horizontal distance from pad (meters)
+    max_angle: 70.0       # Max roll/pitch angle (degrees)
+
   # Reward weights for different components
   reward_weights:
     position: 1.0

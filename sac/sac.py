@@ -43,6 +43,7 @@ CRASH_REPORT_NAMES = {
     2: "crash",
     3: "roll_over",
     4: "pitch_over",
+    5: "out_of_bounds",
 }
 
 

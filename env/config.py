@@ -62,6 +62,9 @@ class RocketEnvConfig:
     frame_skip: int = 5
     reset_noise_scale: float = 0.01
     verbose: int = 0
+    # Termination conditions
+    max_distance: float = 20.0  # Max horizontal distance from pad before termination
+    max_angle: float = 70.0  # Max roll/pitch angle before termination
 
     def get_design_config(self) -> RocketDesignConfig:
         """Get the RocketDesignConfig for the current design."""
