@@ -30,7 +30,6 @@ from torchrl.modules import MLP, ProbabilisticActor, ValueOperator
 from torchrl.modules.distributions import TanhNormal
 from torchrl.objectives import SoftUpdate
 from torchrl.objectives.sac import SACLoss
-from torchrl.record import VideoRecorder
 import numpy as np
 
 # ====================================================================
@@ -169,12 +168,10 @@ def make_environment(cfg, logger=None):
 
     train_env = apply_env_transforms(parallel_env, cfg.env.max_episode_steps)
 
+    # Eval env renders pixels if video logging is enabled
     partial = functools.partial(env_maker, cfg=cfg, from_pixels=cfg.logger.video)
     trsf_clone = train_env.transform.clone()
-    if cfg.logger.video:
-        trsf_clone.insert(
-            0, VideoRecorder(logger, tag="rendering/test", in_keys=["pixels"])
-        )
+    # Note: Video logging is handled manually in sac.py with correct step
     eval_env = TransformedEnv(
         ParallelEnv(
             cfg.collector.env_per_collector,

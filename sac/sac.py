@@ -19,13 +19,13 @@ import numpy as np
 import torch
 import torch.cuda
 import tqdm
+import wandb
 from tensordict import TensorDict
 from torchrl._utils import logger as torchrl_logger
 from torchrl.envs.utils import ExplorationType, set_exploration_type
 
 from torchrl.record.loggers import generate_exp_name, get_logger
 from utils import (
-    dump_video,
     log_metrics,
     make_collector,
     make_environment,
@@ -285,11 +285,23 @@ def main(cfg: "DictConfig"):  # noqa: F821
                     auto_cast_to_device=True,
                     break_when_any_done=True,
                 )
-                eval_env.apply(dump_video)
                 eval_time = time.time() - eval_start
                 eval_reward = eval_rollout["next", "reward"].sum(-2).mean().item()
                 metrics_to_log["eval/reward"] = eval_reward
                 metrics_to_log["eval/time"] = eval_time
+
+                # Log video to wandb with correct step
+                if cfg.logger.video and "pixels" in eval_rollout.keys():
+                    pixels = eval_rollout["pixels"].cpu().numpy()
+                    # pixels shape: [T, H, W, C] or [T, B, H, W, C]
+                    if pixels.ndim == 5:
+                        pixels = pixels[:, 0]  # Take first env if batched
+                    # wandb expects [T, C, H, W]
+                    pixels = np.transpose(pixels, (0, 3, 1, 2))
+                    wandb.log(
+                        {"eval/video": wandb.Video(pixels, fps=20, format="mp4")},
+                        step=collected_frames,
+                    )
 
                 # Log evaluation episode metrics if available
                 if "crash_report" in eval_rollout.keys():
