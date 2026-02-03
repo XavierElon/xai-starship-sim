@@ -144,3 +144,9 @@ pytest.ini
 .pre-commit-config.yaml
 
 MUJOCO_LOG.TXT
+
+# uv
+uv.lock
+
+# Claude Code
+CLAUDE.md
