@@ -13,23 +13,28 @@ class RocketDesignConfig:
 
 
 # Registry of available rocket designs
+# target_height = rocket center z-position when landed upright
 ROCKET_DESIGNS: Dict[str, RocketDesignConfig] = {
-    "v0": RocketDesignConfig("single_rocket_test.xml", 1.02, "cylinder"),
-    "v1": RocketDesignConfig("rocket_v1_landing_legs.xml", 0.55, "two_legs"),
-    "v2": RocketDesignConfig("rocket_v2_three_legs.xml", 0.55, "tripod"),
+    "v0": RocketDesignConfig("single_rocket_test.xml", 1.0, "cylinder"),
+    "v1": RocketDesignConfig("rocket_v1_landing_legs.xml", 1.85, "two_legs"),  # Unstable (2 legs)
+    "v2": RocketDesignConfig("rocket_v2_three_legs.xml", 1.93, "tripod"),
 }
 
 
 @dataclass
 class DomainRandomizationConfig:
-    """Configuration for domain randomization during training."""
+    """Configuration for domain randomization during training.
+
+    Default values are tight for stable early training.
+    Widen ranges gradually for robustness after initial convergence.
+    """
     enabled: bool = False
-    mass_range: Tuple[float, float] = (0.8, 1.2)  # Multiplier on base mass
-    thrust_range: Tuple[float, float] = (0.9, 1.1)  # Multiplier on thrust
-    gravity_range: Tuple[float, float] = (9.0, 10.5)  # Gravity in m/s^2
-    initial_height_range: Tuple[float, float] = (40.0, 60.0)  # Starting height
-    initial_velocity_range: Tuple[float, float] = (-2.0, 2.0)  # Initial velocity range
-    initial_orientation_range: Tuple[float, float] = (-5.0, 5.0)  # Initial orientation in degrees
+    mass_range: Tuple[float, float] = (0.95, 1.05)  # ±5% mass variation
+    thrust_range: Tuple[float, float] = (0.95, 1.05)  # ±5% thrust variation
+    gravity_range: Tuple[float, float] = (9.7, 9.9)  # Tight around Earth's 9.81
+    initial_height_range: Tuple[float, float] = (48.0, 52.0)  # ±4m around 50m
+    initial_velocity_range: Tuple[float, float] = (-0.5, 0.5)  # Small perturbations
+    initial_orientation_range: Tuple[float, float] = (-2.0, 2.0)  # ±2° tilt
 
 
 @dataclass
