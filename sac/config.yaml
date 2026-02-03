@@ -37,6 +37,13 @@ env:
     crash_penalty: -50.0
     tip_over_penalty: -30.0
 
+  # Curriculum learning settings
+  curriculum:
+    enabled: false
+    heights: [5.0, 10.0, 20.0, 35.0, 50.0]
+    success_threshold: 0.7  # 70% success rate to advance
+    window_size: 100  # Episodes to average over
+
 # collector
 collector:
   total_frames: 1_000_000

@@ -8,6 +8,7 @@ from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
 
 from env.config import (
+    CurriculumConfig,
     DomainRandomizationConfig,
     RewardWeights,
     RocketEnvConfig,
@@ -121,6 +122,9 @@ class RocketLander(MujocoEnv):
         self._original_gravity = self.model.opt.gravity.copy()
         self._original_gear = self.model.actuator_gear.copy()
 
+        # Curriculum learning state
+        self._curriculum_height: Optional[float] = None
+
     def _build_config(
         self,
         rocket_design: Optional[str],
@@ -182,6 +186,22 @@ class RocketLander(MujocoEnv):
         self._episode_total_thrust = 0.0
         self._episode_max_velocity = 0.0
 
+    def set_curriculum_height(self, height: float) -> None:
+        """Set the initial height for curriculum learning.
+
+        Args:
+            height: The starting height in meters for episodes.
+        """
+        self._curriculum_height = height
+
+    def get_curriculum_height(self) -> float:
+        """Get current curriculum height (or default from XML).
+
+        Returns:
+            The current curriculum height, or the default initial height from XML.
+        """
+        return self._curriculum_height if self._curriculum_height is not None else self.init_qpos[2]
+
     def _apply_domain_randomization(self):
         """Apply domain randomization to model parameters."""
         dr = self.config.domain_randomization
@@ -207,12 +227,17 @@ class RocketLander(MujocoEnv):
         qpos = self.init_qpos.copy()
         qvel = self.init_qvel.copy()
 
+        # Apply curriculum height if set (takes precedence)
+        if self._curriculum_height is not None:
+            qpos[2] = self._curriculum_height
+
         if dr.enabled:
-            # Randomize initial height
-            height = self.np_random.uniform(
-                dr.initial_height_range[0], dr.initial_height_range[1]
-            )
-            qpos[2] = height
+            # Randomize initial height (only if curriculum not set)
+            if self._curriculum_height is None:
+                height = self.np_random.uniform(
+                    dr.initial_height_range[0], dr.initial_height_range[1]
+                )
+                qpos[2] = height
 
             # Randomize initial velocity
             vel_range = dr.initial_velocity_range

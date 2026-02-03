@@ -103,7 +103,7 @@ def build_rocket_env_kwargs(cfg):
     return env_kwargs
 
 
-def env_maker(cfg, device="cpu", from_pixels=False):
+def env_maker(cfg, device="cpu", from_pixels=False, curriculum_height=None):
     lib = cfg.env.library
     if lib in ("gym", "gymnasium"):
         with set_gym_backend(lib):
@@ -135,8 +135,14 @@ def env_maker(cfg, device="cpu", from_pixels=False):
             env_kwargs["width"] = 256
             env_kwargs["height"] = 256
 
+            rocket_env = RocketLander(**env_kwargs)
+
+            # Set curriculum height if provided
+            if curriculum_height is not None:
+                rocket_env.set_curriculum_height(curriculum_height)
+
             return GymWrapper(
-                RocketLander(**env_kwargs),
+                rocket_env,
                 device=cfg.collector.device,
                 from_pixels=from_pixels,  # Use parameter, not cfg.logger.video
             )
@@ -159,9 +165,15 @@ def apply_env_transforms(env, max_episode_steps):
     return transformed_env
 
 
-def make_environment(cfg, logger=None):
-    """Make environments for training and evaluation."""
-    partial = functools.partial(env_maker, cfg=cfg)
+def make_environment(cfg, logger=None, curriculum_height=None):
+    """Make environments for training and evaluation.
+
+    Args:
+        cfg: Hydra config
+        logger: Optional logger
+        curriculum_height: Optional starting height for curriculum learning
+    """
+    partial = functools.partial(env_maker, cfg=cfg, curriculum_height=curriculum_height)
     parallel_env = ParallelEnv(
         cfg.collector.env_per_collector,
         EnvCreator(partial),
@@ -172,7 +184,7 @@ def make_environment(cfg, logger=None):
     train_env = apply_env_transforms(parallel_env, cfg.env.max_episode_steps)
 
     # Eval env renders pixels if video logging is enabled
-    partial = functools.partial(env_maker, cfg=cfg, from_pixels=cfg.logger.video)
+    partial = functools.partial(env_maker, cfg=cfg, from_pixels=cfg.logger.video, curriculum_height=curriculum_height)
     trsf_clone = train_env.transform.clone()
     # Note: Video logging is handled manually in sac.py with correct step
     eval_env = TransformedEnv(
@@ -191,14 +203,22 @@ def make_environment(cfg, logger=None):
 # ---------------------------
 
 
-def make_collector(cfg, train_env, actor_model_explore):
-    """Make collector."""
+def make_collector(cfg, train_env, actor_model_explore, total_frames=None, init_random_frames=None):
+    """Make collector.
+
+    Args:
+        cfg: Hydra config
+        train_env: Training environment
+        actor_model_explore: Exploration policy
+        total_frames: Override for total frames (for curriculum restarts)
+        init_random_frames: Override for init random frames (set to 0 after first stage)
+    """
     collector = SyncDataCollector(
         train_env,
         actor_model_explore,
-        init_random_frames=cfg.collector.init_random_frames,
+        init_random_frames=init_random_frames if init_random_frames is not None else cfg.collector.init_random_frames,
         frames_per_batch=cfg.collector.frames_per_batch,
-        total_frames=cfg.collector.total_frames,
+        total_frames=total_frames if total_frames is not None else cfg.collector.total_frames,
         device=cfg.collector.device,
     )
     collector.set_seed(cfg.env.seed)
@@ -401,3 +421,5 @@ def get_activation(cfg):
 def dump_video(module):
     if isinstance(module, VideoRecorder):
         module.dump()
+
+

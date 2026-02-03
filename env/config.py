@@ -5,6 +5,20 @@ from typing import Dict, Optional, Tuple
 
 
 @dataclass
+class CurriculumConfig:
+    """Configuration for curriculum learning.
+
+    Curriculum learning starts training from lower heights and progressively
+    increases to full height as the agent improves.
+    """
+
+    enabled: bool = False
+    heights: Tuple[float, ...] = (5.0, 10.0, 20.0, 35.0, 50.0)
+    success_threshold: float = 0.7  # 70% success rate to advance
+    window_size: int = 100  # Episodes to average over
+
+
+@dataclass
 class RocketDesignConfig:
     """Configuration for a specific rocket design."""
     xml_file: str
@@ -58,6 +72,7 @@ class RocketEnvConfig:
         default_factory=DomainRandomizationConfig
     )
     reward_weights: RewardWeights = field(default_factory=RewardWeights)
+    curriculum: CurriculumConfig = field(default_factory=CurriculumConfig)
     max_episode_length: int = 1000
     frame_skip: int = 5
     reset_noise_scale: float = 0.01

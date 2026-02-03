@@ -29,6 +29,8 @@ from torchrl._utils import logger as torchrl_logger
 from torchrl.envs.utils import ExplorationType, set_exploration_type
 
 from torchrl.record.loggers import generate_exp_name, get_logger
+from typing import List, Optional, Tuple
+
 from utils import (
     log_metrics,
     make_collector,
@@ -90,6 +92,83 @@ def aggregate_episode_metrics(info_dicts):
     return {key: np.mean(values) for key, values in metrics.items() if values}
 
 
+class CurriculumScheduler:
+    """Manages curriculum learning by tracking success and advancing height stages.
+
+    Tracks rolling success rate over recent episodes and advances to the next
+    height stage when the success threshold is met.
+    """
+
+    def __init__(
+        self,
+        heights: Tuple[float, ...],
+        success_threshold: float,
+        window_size: int,
+    ):
+        """Initialize the curriculum scheduler.
+
+        Args:
+            heights: Tuple of heights to progress through (e.g., (5, 10, 20, 35, 50))
+            success_threshold: Success rate required to advance (e.g., 0.7 for 70%)
+            window_size: Number of episodes to average over for success rate
+        """
+        self.heights = heights
+        self.success_threshold = success_threshold
+        self.window_size = window_size
+        self.current_stage = 0
+        self.episode_outcomes: List[int] = []  # Rolling window of success/fail
+
+    def record_outcome(self, crash_report: int) -> None:
+        """Record episode outcome (1 = success, else failure).
+
+        Args:
+            crash_report: The crash report code (1 = success)
+        """
+        self.episode_outcomes.append(1 if crash_report == 1 else 0)
+        if len(self.episode_outcomes) > self.window_size:
+            self.episode_outcomes.pop(0)
+
+    def get_success_rate(self) -> float:
+        """Get current rolling success rate.
+
+        Returns:
+            Success rate as a float between 0 and 1, or 0 if no episodes recorded.
+        """
+        if not self.episode_outcomes:
+            return 0.0
+        return sum(self.episode_outcomes) / len(self.episode_outcomes)
+
+    def should_advance(self) -> bool:
+        """Check if we should advance to next curriculum stage.
+
+        Returns:
+            True if success rate exceeds threshold and window is full.
+        """
+        if len(self.episode_outcomes) < self.window_size:
+            return False
+        return self.get_success_rate() >= self.success_threshold
+
+    def advance(self) -> Optional[float]:
+        """Advance to next stage, return new height or None if at max.
+
+        Returns:
+            The new height if advanced, or None if already at final stage.
+        """
+        if self.current_stage < len(self.heights) - 1:
+            self.current_stage += 1
+            self.episode_outcomes = []  # Reset window for new stage
+            return self.heights[self.current_stage]
+        return None
+
+    def current_height(self) -> float:
+        """Get current curriculum height.
+
+        Returns:
+            The current stage's height in meters.
+        """
+        return self.heights[self.current_stage]
+
+
 @hydra.main(version_base="1.1", config_path="", config_name="config")
 def main(cfg: "DictConfig"):  # noqa: F821
     # Reset working directory to project root - Hydra changes it which breaks wandb video logging
@@ -127,8 +206,25 @@ def main(cfg: "DictConfig"):  # noqa: F821
     log_reward_components = getattr(cfg.logger, "log_reward_components", True)
     log_crash_breakdown = getattr(cfg.logger, "log_crash_breakdown", True)
 
+    # Initialize curriculum learning if enabled
+    curriculum = None
+    curriculum_height = None
+    if hasattr(cfg.env, 'curriculum') and getattr(cfg.env.curriculum, 'enabled', False):
+        curriculum_cfg = cfg.env.curriculum
+        heights = tuple(curriculum_cfg.heights) if hasattr(curriculum_cfg, 'heights') else (5.0, 10.0, 20.0, 35.0, 50.0)
+        success_threshold = getattr(curriculum_cfg, 'success_threshold', 0.7)
+        window_size = getattr(curriculum_cfg, 'window_size', 100)
+
+        curriculum = CurriculumScheduler(
+            heights=heights,
+            success_threshold=success_threshold,
+            window_size=window_size,
+        )
+        curriculum_height = curriculum.current_height()
+        torchrl_logger.info(f"Curriculum learning enabled: starting at {curriculum_height}m")
+
     # Create environments
-    train_env, eval_env = make_environment(cfg, logger=logger)
+    train_env, eval_env = make_environment(cfg, logger=logger, curriculum_height=curriculum_height)
 
     # Create agent
     model, exploration_policy = make_sac_agent(cfg, train_env, eval_env, device)
@@ -177,179 +273,254 @@ def main(cfg: "DictConfig"):  # noqa: F821
     batch_episode_metrics = []
 
     sampling_start = time.time()
-    for i, tensordict in enumerate(collector):
-        sampling_time = time.time() - sampling_start
+    curriculum_restart = False  # Flag to track if we need to restart due to curriculum
 
-        # Update weights of the inference policy
-        collector.update_policy_weights_()
+    while collected_frames < cfg.collector.total_frames:
+        curriculum_restart = False
+        for i, tensordict in enumerate(collector):
+            sampling_time = time.time() - sampling_start
 
-        pbar.update(tensordict.numel())
+            # Update weights of the inference policy
+            collector.update_policy_weights_()
 
-        tensordict = tensordict.reshape(-1)
-        current_frames = tensordict.numel()
-        # Add to replay buffer
-        replay_buffer.extend(tensordict.cpu())
-        collected_frames += current_frames
+            pbar.update(tensordict.numel())
 
-        # Collect crash reports and info from this batch
-        if "crash_report" in tensordict.keys():
-            # Get crash reports for done episodes
-            done_mask = tensordict["next", "done"].squeeze(-1)
-            if done_mask.any():
-                crash_codes = tensordict["crash_report"][done_mask]
-                batch_crash_reports.extend(crash_codes.tolist())
+            tensordict = tensordict.reshape(-1)
+            current_frames = tensordict.numel()
+            # Add to replay buffer
+            replay_buffer.extend(tensordict.cpu())
+            collected_frames += current_frames
 
-        # Optimization steps
-        training_start = time.time()
-        if collected_frames >= init_random_frames:
-            losses = TensorDict({}, batch_size=[num_updates])
-            for j in range(num_updates):
-                # Sample from replay buffer
-                sampled_tensordict = replay_buffer.sample()
-                if sampled_tensordict.device != device:
-                    sampled_tensordict = sampled_tensordict.to(
-                        device, non_blocking=True
-                    )
-                else:
-                    sampled_tensordict = sampled_tensordict.clone()
+            # Collect crash reports and info from this batch
+            if "crash_report" in tensordict.keys():
+                # Get crash reports for done episodes
+                done_mask = tensordict["next", "done"].squeeze(-1)
+                if done_mask.any():
+                    crash_codes = tensordict["crash_report"][done_mask]
+                    batch_crash_reports.extend(crash_codes.tolist())
 
-                # Compute loss
-                loss_td = loss_module(sampled_tensordict)
+                    # Record outcomes for curriculum learning
+                    if curriculum is not None:
+                        for code in crash_codes.tolist():
+                            curriculum.record_outcome(int(code))
 
-                actor_loss = loss_td["loss_actor"]
-                q_loss = loss_td["loss_qvalue"]
-                alpha_loss = loss_td["loss_alpha"]
+            # Optimization steps
+            training_start = time.time()
+            if collected_frames >= init_random_frames:
+                losses = TensorDict({}, batch_size=[num_updates])
+                for j in range(num_updates):
+                    # Sample from replay buffer
+                    sampled_tensordict = replay_buffer.sample()
+                    if sampled_tensordict.device != device:
+                        sampled_tensordict = sampled_tensordict.to(
+                            device, non_blocking=True
+                        )
+                    else:
+                        sampled_tensordict = sampled_tensordict.clone()
 
-                # Update actor
-                optimizer_actor.zero_grad()
-                actor_loss.backward()
-                optimizer_actor.step()
+                    # Compute loss
+                    loss_td = loss_module(sampled_tensordict)
 
-                # Update critic
-                optimizer_critic.zero_grad()
-                q_loss.backward()
-                optimizer_critic.step()
+                    actor_loss = loss_td["loss_actor"]
+                    q_loss = loss_td["loss_qvalue"]
+                    alpha_loss = loss_td["loss_alpha"]
 
-                # Update alpha
-                optimizer_alpha.zero_grad()
-                alpha_loss.backward()
-                optimizer_alpha.step()
+                    # Update actor
+                    optimizer_actor.zero_grad()
+                    actor_loss.backward()
+                    optimizer_actor.step()
 
-                losses[j] = loss_td.select(
-                    "loss_actor", "loss_qvalue", "loss_alpha"
-                ).detach()
+                    # Update critic
+                    optimizer_critic.zero_grad()
+                    q_loss.backward()
+                    optimizer_critic.step()
 
-                # Update qnet_target params
-                target_net_updater.step()
+                    # Update alpha
+                    optimizer_alpha.zero_grad()
+                    alpha_loss.backward()
+                    optimizer_alpha.step()
 
-                # Update priority
-                if prb:
-                    replay_buffer.update_priority(sampled_tensordict)
+                    losses[j] = loss_td.select(
+                        "loss_actor", "loss_qvalue", "loss_alpha"
+                    ).detach()
 
-        training_time = time.time() - training_start
-        episode_end = (
-            tensordict["next", "done"]
-            if tensordict["next", "done"].any()
-            else tensordict["next", "truncated"]
-        )
-        episode_rewards = tensordict["next", "episode_reward"][episode_end]
+                    # Update qnet_target params
+                    target_net_updater.step()
 
-        # Logging
-        metrics_to_log = {}
-        if len(episode_rewards) > 0:
-            episode_length = tensordict["next", "step_count"][episode_end]
-            metrics_to_log["train/reward"] = episode_rewards.mean().item()
-            metrics_to_log["train/episode_length"] = episode_length.sum().item() / len(
-                episode_length
+                    # Update priority
+                    if prb:
+                        replay_buffer.update_priority(sampled_tensordict)
+
+            training_time = time.time() - training_start
+            episode_end = (
+                tensordict["next", "done"]
+                if tensordict["next", "done"].any()
+                else tensordict["next", "truncated"]
             )
+            episode_rewards = tensordict["next", "episode_reward"][episode_end]
 
-            # Log crash breakdown
-            if log_crash_breakdown and batch_crash_reports:
-                crash_stats = aggregate_crash_stats(batch_crash_reports)
-                total_episodes = sum(crash_stats.values())
-                for crash_type, count in crash_stats.items():
-                    metrics_to_log[f"train/crash_{crash_type}"] = count
-                    metrics_to_log[f"train/crash_{crash_type}_rate"] = (
-                        count / total_episodes if total_episodes > 0 else 0
+            # Logging
+            metrics_to_log = {}
+            if len(episode_rewards) > 0:
+                episode_length = tensordict["next", "step_count"][episode_end]
+                metrics_to_log["train/reward"] = episode_rewards.mean().item()
+                metrics_to_log["train/episode_length"] = episode_length.sum().item() / len(
+                    episode_length
+                )
+
+                # Log crash breakdown
+                if log_crash_breakdown and batch_crash_reports:
+                    crash_stats = aggregate_crash_stats(batch_crash_reports)
+                    total_episodes = sum(crash_stats.values())
+                    for crash_type, count in crash_stats.items():
+                        metrics_to_log[f"train/crash_{crash_type}"] = count
+                        metrics_to_log[f"train/crash_{crash_type}_rate"] = (
+                            count / total_episodes if total_episodes > 0 else 0
+                        )
+                    batch_crash_reports = []  # Reset for next batch
+
+                # Curriculum learning: check for advancement and log metrics
+                if curriculum is not None:
+                    metrics_to_log["curriculum/height"] = curriculum.current_height()
+                    metrics_to_log["curriculum/stage"] = curriculum.current_stage
+                    metrics_to_log["curriculum/success_rate"] = curriculum.get_success_rate()
+
+                    # Check if we should advance to the next stage
+                    if curriculum.should_advance():
+                        old_height = curriculum.current_height()
+                        old_success_rate = curriculum.get_success_rate()
+                        new_height = curriculum.advance()
+                        if new_height is not None:
+                            # Save checkpoint before advancing
+                            checkpoint_path = f"curriculum_stage_{curriculum.current_stage - 1}_height_{old_height}m.pt"
+                            torch.save({
+                                'model_state_dict': model.state_dict(),
+                                'optimizer_actor': optimizer_actor.state_dict(),
+                                'optimizer_critic': optimizer_critic.state_dict(),
+                                'optimizer_alpha': optimizer_alpha.state_dict(),
+                                'collected_frames': collected_frames,
+                                'curriculum_stage': curriculum.current_stage - 1,
+                                'curriculum_height': old_height,
+                            }, checkpoint_path)
+                            torchrl_logger.info(f"Saved checkpoint: {checkpoint_path}")
+
+                            torchrl_logger.info(
+                                f"Curriculum advancing to stage {curriculum.current_stage}: "
+                                f"{new_height}m (success rate was {old_success_rate:.2%})"
+                            )
+
+                            # Shutdown old collector and environments
+                            collector.shutdown()
+                            if not train_env.is_closed:
+                                train_env.close()
+                            if not eval_env.is_closed:
+                                eval_env.close()
+
+                            # Create new environments with new height
+                            train_env, eval_env = make_environment(cfg, logger=logger, curriculum_height=new_height)
+
+                            # Create new collector with existing model and remaining frames
+                            remaining_frames = cfg.collector.total_frames - collected_frames
+                            collector = make_collector(
+                                cfg, train_env, exploration_policy,
+                                total_frames=remaining_frames,
+                                init_random_frames=0,  # No random exploration after first stage
+                            )
+
+                            # Update metrics
+                            metrics_to_log["curriculum/height"] = new_height
+                            metrics_to_log["curriculum/stage"] = curriculum.current_stage
+
+                            # Log metrics before breaking
+                            if logger is not None:
+                                log_metrics(logger, metrics_to_log, collected_frames)
+
+                            # Set flag and break to restart with new collector
+                            curriculum_restart = True
+                            sampling_start = time.time()
+                            break
+
+            if collected_frames >= init_random_frames:
+                metrics_to_log["train/q_loss"] = losses.get("loss_qvalue").mean().item()
+                metrics_to_log["train/actor_loss"] = losses.get("loss_actor").mean().item()
+                metrics_to_log["train/alpha_loss"] = losses.get("loss_alpha").mean().item()
+                metrics_to_log["train/alpha"] = loss_td["alpha"].item()
+                metrics_to_log["train/entropy"] = loss_td["entropy"].item()
+                metrics_to_log["train/sampling_time"] = sampling_time
+                metrics_to_log["train/training_time"] = training_time
+
+            # Evaluation
+            eval_video = None
+            if abs(collected_frames % eval_iter) < frames_per_batch:
+                with set_exploration_type(ExplorationType.DETERMINISTIC), torch.no_grad():
+                    eval_start = time.time()
+                    eval_rollout = eval_env.rollout(
+                        eval_rollout_steps,
+                        model[0],
+                        auto_cast_to_device=True,
+                        break_when_any_done=True,
                     )
-                batch_crash_reports = []  # Reset for next batch
+                    eval_time = time.time() - eval_start
+                    eval_reward = eval_rollout["next", "reward"].sum(-2).mean().item()
+                    # batch_size is [num_envs, timesteps] for rollout
+                    eval_episode_length = eval_rollout.batch_size[-1]  # Get timesteps dimension
+                    metrics_to_log["eval/reward"] = eval_reward
+                    metrics_to_log["eval/time"] = eval_time
+                    metrics_to_log["eval/episode_length"] = eval_episode_length
 
-        if collected_frames >= init_random_frames:
-            metrics_to_log["train/q_loss"] = losses.get("loss_qvalue").mean().item()
-            metrics_to_log["train/actor_loss"] = losses.get("loss_actor").mean().item()
-            metrics_to_log["train/alpha_loss"] = losses.get("loss_alpha").mean().item()
-            metrics_to_log["train/alpha"] = loss_td["alpha"].item()
-            metrics_to_log["train/entropy"] = loss_td["entropy"].item()
-            metrics_to_log["train/sampling_time"] = sampling_time
-            metrics_to_log["train/training_time"] = training_time
+                    # Prepare video for logging
+                    eval_video = None
+                    if cfg.logger.video and "pixels" in eval_rollout.keys():
+                        pixels = eval_rollout["pixels"]
+                        # pixels shape: [B, T, H, W, C] where B=num_envs, T=timesteps
+                        if pixels.ndim == 5:
+                            pixels = pixels[0]  # Take first env -> [T, H, W, C]
+                        eval_video = pixels
 
-        # Evaluation
-        eval_video = None
-        if abs(collected_frames % eval_iter) < frames_per_batch:
-            with set_exploration_type(ExplorationType.DETERMINISTIC), torch.no_grad():
-                eval_start = time.time()
-                eval_rollout = eval_env.rollout(
-                    eval_rollout_steps,
-                    model[0],
-                    auto_cast_to_device=True,
-                    break_when_any_done=True,
-                )
-                eval_time = time.time() - eval_start
-                eval_reward = eval_rollout["next", "reward"].sum(-2).mean().item()
-                # batch_size is [num_envs, timesteps] for rollout
-                eval_episode_length = eval_rollout.batch_size[-1]  # Get timesteps dimension
-                metrics_to_log["eval/reward"] = eval_reward
-                metrics_to_log["eval/time"] = eval_time
-                metrics_to_log["eval/episode_length"] = eval_episode_length
+                    # Log evaluation episode metrics if available
+                    if "crash_report" in eval_rollout.keys():
+                        # Get final crash report
+                        final_crash = eval_rollout["crash_report"][-1].item()
+                        crash_name = CRASH_REPORT_NAMES.get(int(final_crash), "unknown")
+                        metrics_to_log["eval/outcome"] = final_crash
+                        metrics_to_log[f"eval/outcome_{crash_name}"] = 1
 
-                # Prepare video for logging
-                eval_video = None
-                if cfg.logger.video and "pixels" in eval_rollout.keys():
-                    pixels = eval_rollout["pixels"]
-                    # pixels shape: [B, T, H, W, C] where B=num_envs, T=timesteps
-                    if pixels.ndim == 5:
-                        pixels = pixels[0]  # Take first env -> [T, H, W, C]
-                    eval_video = pixels
+                    # Calculate eval episode metrics
+                    final_obs = eval_rollout["next", "observation"][-1]
+                    if final_obs.dim() > 1:
+                        final_obs = final_obs[0]  # Take first env if batched
 
-                # Log evaluation episode metrics if available
-                if "crash_report" in eval_rollout.keys():
-                    # Get final crash report
-                    final_crash = eval_rollout["crash_report"][-1].item()
-                    crash_name = CRASH_REPORT_NAMES.get(int(final_crash), "unknown")
-                    metrics_to_log["eval/outcome"] = final_crash
-                    metrics_to_log[f"eval/outcome_{crash_name}"] = 1
+                    # Extract position and velocity from observation
+                    # Observation: [pos_x, pos_y, pos_z, roll, pitch, yaw, vel_x, vel_y, vel_z, ...]
+                    pos = final_obs[:3].cpu().numpy()
+                    vel = final_obs[6:9].cpu().numpy()
 
-                # Calculate eval episode metrics
-                final_obs = eval_rollout["next", "observation"][-1]
-                if final_obs.dim() > 1:
-                    final_obs = final_obs[0]  # Take first env if batched
+                    metrics_to_log["eval/final_horizontal_error"] = float(
+                        np.sqrt(pos[0] ** 2 + pos[1] ** 2)
+                    )
+                    metrics_to_log["eval/final_velocity"] = float(np.linalg.norm(vel))
 
-                # Extract position and velocity from observation
-                # Observation: [pos_x, pos_y, pos_z, roll, pitch, yaw, vel_x, vel_y, vel_z, ...]
-                pos = final_obs[:3].cpu().numpy()
-                vel = final_obs[6:9].cpu().numpy()
+                    # Calculate total thrust used in eval episode
+                    if "action" in eval_rollout.keys():
+                        actions = eval_rollout["action"].cpu().numpy()
+                        total_thrust = float(np.sum(np.abs(actions)))
+                        metrics_to_log["eval/total_thrust"] = total_thrust
 
-                metrics_to_log["eval/final_horizontal_error"] = float(
-                    np.sqrt(pos[0] ** 2 + pos[1] ** 2)
-                )
-                metrics_to_log["eval/final_velocity"] = float(np.linalg.norm(vel))
+            if logger is not None:
+                log_metrics(logger, metrics_to_log, collected_frames)
+                # Log video directly with wandb - bypass TorchRL logger
+                if eval_video is not None:
+                    vid = eval_video.cpu().numpy()
+                    vid = np.transpose(vid, (0, 3, 1, 2))  # [T,H,W,C] -> [T,C,H,W]
+                    vid = vid.astype(np.uint8)
+                    wandb.log({"eval/video": wandb.Video(vid, fps=20, format="mp4")})
+            sampling_start = time.time()
 
-                # Calculate total thrust used in eval episode
-                if "action" in eval_rollout.keys():
-                    actions = eval_rollout["action"].cpu().numpy()
-                    total_thrust = float(np.sum(np.abs(actions)))
-                    metrics_to_log["eval/total_thrust"] = total_thrust
+        # If we didn't break due to curriculum, the collector is exhausted
+        if not curriculum_restart:
+            break
 
-        if logger is not None:
-            log_metrics(logger, metrics_to_log, collected_frames)
-            # Log video directly with wandb - bypass TorchRL logger
-            if eval_video is not None:
-                vid = eval_video.cpu().numpy()
-                vid = np.transpose(vid, (0, 3, 1, 2))  # [T,H,W,C] -> [T,C,H,W]
-                vid = vid.astype(np.uint8)
-                wandb.log({"eval/video": wandb.Video(vid, fps=20, format="mp4")})
-        sampling_start = time.time()
-
+    # Cleanup
     collector.shutdown()
     if not eval_env.is_closed:
         eval_env.close()
