@@ -1,14 +1,19 @@
-# spaceX
+# SpaceX Rocket Landing Simulator
 
+A SpaceX Falcon 9-style rocket landing simulator using MuJoCo physics and Soft Actor-Critic (SAC) reinforcement learning.
 
-## Create a training routine 
-Routine that increases the initial rocket starting hight.
-Starting at 5 once successfully trained go to 10 with the trained policy weights from 5 etc. 
-Training should be faster and with the initialized weights and we can scale over time. 
+![Rocket Landing](rocket_preview.png)
 
+## Overview
 
+Train an RL agent to land a rocket vertically on a target pad, similar to SpaceX Falcon 9 landings. The environment features:
 
-# Setup
+- **Realistic physics**: MuJoCo simulation with 6-DOF free joint dynamics
+- **Multiple rocket designs**: Simple cylinder (v0), two-leg (v1), and stable tripod (v2)
+- **Domain randomization**: Configurable mass, thrust, gravity, and initial conditions
+- **Detailed metrics**: Crash breakdowns, reward components, and video logging to W&B
+
+## Setup
 
 ```bash
 uv sync
