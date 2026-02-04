@@ -166,8 +166,7 @@ def main(cfg: "DictConfig"):  # noqa: F821
         batch_size=cfg.optim.batch_size,
         prb=cfg.replay_buffer.prb,
         buffer_size=cfg.replay_buffer.size,
-        scratch_dir=cfg.replay_buffer.scratch_dir,
-        device="cpu",
+        device=device,
     )
 
     # Create optimizers
@@ -216,7 +215,7 @@ def main(cfg: "DictConfig"):  # noqa: F821
             tensordict = tensordict.reshape(-1)
             current_frames = tensordict.numel()
             # Add to replay buffer
-            replay_buffer.extend(tensordict.cpu())
+            replay_buffer.extend(tensordict)
             collected_frames += current_frames
 
             # Collect crash reports from this batch

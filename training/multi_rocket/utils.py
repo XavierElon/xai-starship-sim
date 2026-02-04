@@ -8,7 +8,7 @@ from tensordict.nn.distributions import NormalParamExtractor
 from torch import nn, optim
 from torchrl.collectors import SyncDataCollector
 from torchrl.data import TensorDictPrioritizedReplayBuffer, TensorDictReplayBuffer
-from torchrl.data.replay_buffers.storages import LazyMemmapStorage
+from torchrl.data.replay_buffers.storages import LazyTensorStorage
 from torchrl.envs import Compose, TransformedEnv
 from torchrl.envs.transforms import InitTracker, RewardSum, StepCounter
 from torchrl.envs.utils import ExplorationType, set_exploration_type
@@ -28,7 +28,7 @@ if ROOT_DIR not in sys.path:
 # -----------------
 
 
-def env_maker(cfg, curriculum_height=None):
+def env_maker(cfg, curriculum_height=None, num_envs=None):
     """Create a RocketLanderWarp environment (already a TorchRL EnvBase)."""
     from env.rocket_landing_warp import RocketLanderWarp
 
@@ -67,7 +67,7 @@ def env_maker(cfg, curriculum_height=None):
         rocket_design = cfg.env.rocket.design
 
     env = RocketLanderWarp(
-        num_envs=cfg.env.num_envs,
+        num_envs=num_envs if num_envs is not None else cfg.env.num_envs,
         rocket_design=rocket_design,
         device=device,
         max_episode_steps=cfg.env.max_episode_steps,
@@ -94,12 +94,12 @@ def make_environment(cfg, logger=None, curriculum_height=None):
     """Make environments for training and evaluation.
 
     The Warp env is already batched, so we don't need ParallelEnv.
-    We create separate instances for train and eval.
+    Train uses cfg.env.num_envs; eval uses a single env for clean episode metrics.
     """
     train_env = env_maker(cfg, curriculum_height=curriculum_height)
     train_env = apply_env_transforms(train_env, cfg.env.max_episode_steps)
 
-    eval_env = env_maker(cfg, curriculum_height=curriculum_height)
+    eval_env = env_maker(cfg, curriculum_height=curriculum_height, num_envs=1)
     eval_env = apply_env_transforms(eval_env, cfg.env.max_episode_steps)
 
     return train_env, eval_env
@@ -127,9 +127,8 @@ def make_collector(cfg, train_env, actor_model_explore, total_frames=None, init_
 def make_replay_buffer(
     batch_size,
     prb=False,
-    buffer_size=1000000,
-    scratch_dir=None,
-    device="cpu",
+    buffer_size=100000,
+    device="cuda",
     prefetch=3,
 ):
     if prb:
@@ -138,9 +137,8 @@ def make_replay_buffer(
             beta=0.5,
             pin_memory=False,
             prefetch=prefetch,
-            storage=LazyMemmapStorage(
+            storage=LazyTensorStorage(
                 buffer_size,
-                scratch_dir=scratch_dir,
                 device=device,
             ),
             batch_size=batch_size,
@@ -149,9 +147,8 @@ def make_replay_buffer(
         replay_buffer = TensorDictReplayBuffer(
             pin_memory=False,
             prefetch=prefetch,
-            storage=LazyMemmapStorage(
+            storage=LazyTensorStorage(
                 buffer_size,
-                scratch_dir=scratch_dir,
                 device=device,
             ),
             batch_size=batch_size,

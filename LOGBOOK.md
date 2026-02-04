@@ -189,10 +189,40 @@ training/
 
 ---
 
+## Phase 7: GPU-Native Training & PPO
+
+### SAC GPU Replay Buffer Fix
+The SAC multi_rocket training was transferring data CPU↔GPU every step: `replay_buffer.extend(tensordict.cpu())` moved collected data to CPU for `LazyMemmapStorage`, then `sampled.to(device)` moved it back to GPU for training. This dominated wall time.
+
+**Fix:** Switched to `LazyTensorStorage` with `device="cuda"` — the replay buffer now lives entirely in VRAM. Reduced buffer size from 1M to 100K to fit in GPU memory (100K transitions × 13-dim obs is ~5MB, well within budget).
+
+### PPO for Massive Parallelism
+Added PPO training setup alongside SAC. PPO is on-policy and a better fit for high-throughput parallel envs — it uses all collected data immediately rather than storing it in a replay buffer.
+
+**Architecture:**
+- Actor: MLP(256,256) with Tanh + `AddStateIndependentNormalScale` (state-independent std)
+- Critic: MLP(256,256) with Tanh → `ValueOperator` (state value, not Q-value)
+- Orthogonal weight initialization (PPO standard)
+- GAE(γ=0.99, λ=0.95) for advantage estimation
+
+**Training loop:**
+- Collect 2048 transitions per batch (8 steps × 256 envs)
+- Compute GAE advantages on GPU (no CPU transfer)
+- 4 PPO epochs per batch with mini-batch size 256
+- `SamplerWithoutReplacement` for mini-batch shuffling
+- Gradient clipping at 0.5
+
+**Config:** `training/multi_rocket/config_ppo.yaml`, run with:
+```bash
+cd training/multi_rocket && python train_ppo.py
+```
+
+---
+
 ## Future Improvements
 
 - [ ] **Wire up GPU training**: Connect `RocketLanderWarp` to SAC training loop for end-to-end GPU training
-- [ ] **PPO for massive parallelism**: SAC is designed for sample efficiency, PPO for throughput — may be better fit for 4096+ envs
+- [x] **PPO for massive parallelism**: Added PPO training setup in `training/multi_rocket/` (Phase 7)
 - [ ] **Curriculum on GPU**: Implement curriculum height changes in the Warp environment
 - [ ] **v2 design training**: Train with the tripod rocket for better landing stability
 - [ ] **Sim-to-real considerations**: Widen domain randomization after initial convergence

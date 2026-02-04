@@ -1,0 +1,69 @@
+# PPO training with GPU-parallel MuJoCo Warp environments
+env:
+  name: rocket_lander_warp
+  library: custom
+  max_episode_steps: 1000
+  seed: 42
+  num_envs: 4096
+
+  # Rocket design and configuration
+  rocket:
+    design: v0  # v0 (cylinder), v1 (two_legs), v2 (tripod)
+
+  # Reward weights
+  reward_weights:
+    position: 1.0
+    orientation: 1.0
+    velocity: 1.0
+    angular_velocity: 1.0
+    distance: 1.0
+    success_bonus: 100.0
+    crash_penalty: -50.0
+    tip_over_penalty: -30.0
+
+  # Termination conditions
+  termination:
+    max_distance: 20.0
+    max_angle: 70.0
+
+# collector
+collector:
+  total_frames: 50_000_000
+  frames_per_batch: 65536  # 4096 envs * 16 steps
+  device: cuda
+
+# PPO loss hyperparameters
+loss:
+  clip_epsilon: 0.2
+  entropy_coeff: 0.01
+  critic_coeff: 0.5
+  loss_critic_type: l2
+  ppo_epochs: 4
+  mini_batch_size: 4096
+  gamma: 0.99
+  gae_lambda: 0.95
+  max_grad_norm: 0.5
+  anneal_lr: true
+  anneal_clip_epsilon: false
+
+# optim
+optim:
+  lr: 3.0e-4
+  device: cuda
+
+# network
+network:
+  hidden_sizes: [256, 256]
+  activation: tanh
+  device: cuda
+
+# logging
+logger:
+  backend: wandb
+  project_name: SpaceX-Landing
+  group_name: null
+  exp_name: ${env.name}_PPO_GPU
+  mode: online
+  eval_iter: 5_000_000
+  video: true
+  log_crash_breakdown: true

@@ -133,7 +133,7 @@ class RocketLanderWarp(EnvBase):
         self._graph = None
         self._capture_cuda_graph()
 
-        super().__init__(device=self._device, batch_size=torch.Size([]))
+        super().__init__(device=self._device, batch_size=torch.Size([num_envs]))
         self._make_spec()
 
     def _capture_cuda_graph(self):
@@ -151,6 +151,7 @@ class RocketLanderWarp(EnvBase):
         """Define observation, action, reward, and done specs."""
         self.observation_spec = Composite(
             observation=Unbounded(shape=(self._num_envs, 13), dtype=torch.float32, device=self._device),
+            shape=(self._num_envs,),
         )
         self.action_spec = Composite(
             action=Bounded(
@@ -159,12 +160,14 @@ class RocketLanderWarp(EnvBase):
                 dtype=torch.float32,
                 device=self._device,
             ),
+            shape=(self._num_envs,),
         )
         self.reward_spec = Unbounded(shape=(self._num_envs, 1), dtype=torch.float32, device=self._device)
         self.done_spec = Composite(
             done=Unbounded(shape=(self._num_envs, 1), dtype=torch.bool, device=self._device),
             terminated=Unbounded(shape=(self._num_envs, 1), dtype=torch.bool, device=self._device),
             truncated=Unbounded(shape=(self._num_envs, 1), dtype=torch.bool, device=self._device),
+            shape=(self._num_envs,),
         )
 
     def _build_obs(self, qpos, qvel):

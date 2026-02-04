@@ -41,11 +41,10 @@ collector:
   device: cuda
   env_per_collector: 1  # Single warp env handles all parallelism
 
-# replay buffer
+# replay buffer (on GPU — keep small to fit VRAM)
 replay_buffer:
-  size: 1000000
+  size: 100000
   prb: 0
-  scratch_dir: null
 
 # optim - tuned for high-throughput GPU training
 optim:
