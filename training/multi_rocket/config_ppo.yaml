@@ -10,16 +10,15 @@ env:
   rocket:
     design: v0  # v0 (cylinder), v1 (two_legs), v2 (tripod)
 
-  # Reward weights
+  # Reward weights (exponential shaping, per-step components in [0,1])
   reward_weights:
-    position: 1.0
-    orientation: 1.0
-    velocity: 1.0
-    angular_velocity: 1.0
-    distance: 1.0
-    success_bonus: 100.0
-    crash_penalty: -50.0
-    tip_over_penalty: -30.0
+    distance: 0.7
+    velocity: 0.15
+    upright: 0.1
+    angular: 0.05
+    success: 100.0
+    crash: -10.0
+    tipover: -10.0
 
   # Termination conditions
   termination:

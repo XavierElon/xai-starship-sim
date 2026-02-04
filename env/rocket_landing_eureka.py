@@ -37,7 +37,7 @@ class RocketLander(MujocoEnv):
         os.chdir(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
         print(os.getcwd())
         xml_path = "./env/xml_files/single_rocket_test.xml"
-        observation_space = Box(low=-np.inf, high=np.inf, shape=(13,), dtype=np.float32)
+        observation_space = Box(low=-np.inf, high=np.inf, shape=(12,), dtype=np.float32)
 
         self.max_episode_length = max_episode_length
         self._reset_noise_scale = reset_noise_scale

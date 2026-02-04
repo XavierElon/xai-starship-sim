@@ -86,14 +86,13 @@ def build_rocket_env_kwargs(cfg):
         rw_cfg = cfg.env.reward_weights
         reward_weights = {}
         for key in [
-            "position",
-            "orientation",
-            "velocity",
-            "angular_velocity",
             "distance",
-            "success_bonus",
-            "crash_penalty",
-            "tip_over_penalty",
+            "velocity",
+            "upright",
+            "angular",
+            "success",
+            "crash",
+            "tipover",
         ]:
             if hasattr(rw_cfg, key):
                 reward_weights[key] = getattr(rw_cfg, key)

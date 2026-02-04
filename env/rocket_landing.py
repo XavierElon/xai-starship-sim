@@ -29,15 +29,7 @@ class RocketLander(MujocoEnv):
     """
     SpaceX-style rocket landing environment using MuJoCo physics.
 
-    Observation is: np.concatenate([pos, roll, pitch, yaw, vel, angular_vel, distance])
-    (13 dimensions)
-
-    Target state is:
-        Angular VEL [0. 0. 0.]
-        Vel  [0. 0. 0.]
-        POS [0. 0. target_height]
-        R-P-Y  0.0 0.0 0.0
-        Goal distance  0.0
+    Observation (12-dim): [pos(3), euler_deg(3), vel(3), angular_vel(3)]
     """
 
     metadata = {
@@ -106,7 +98,7 @@ class RocketLander(MujocoEnv):
         design_config = config.get_design_config()
         xml_path = f"./env/xml_files/{design_config.xml_file}"
 
-        observation_space = Box(low=-np.inf, high=np.inf, shape=(13,), dtype=np.float32)
+        observation_space = Box(low=-np.inf, high=np.inf, shape=(12,), dtype=np.float32)
 
         MujocoEnv.__init__(
             self,
@@ -364,63 +356,59 @@ class RocketLander(MujocoEnv):
 
         roll, pitch, yaw = quaternion_to_euler(self.data.qpos[3:7])
 
-        distance = np.array([np.linalg.norm(self.target_position - pos)])
         if self.verbose:
             print("Angular VEL", np.round(angular_vel, 2))
             print("Vel ", np.round(vel, 2))
             print("POS", np.round(pos, 2))
             print("R-P-Y ", np.round(roll, 2), np.round(pitch, 2), np.round(yaw, 2))
-            print("Goal distance ", np.round(distance, 2))
             print("----" * 2 + "\n")
 
-        return np.concatenate([pos, roll, pitch, yaw, vel, angular_vel, distance])
+        return np.concatenate([pos, roll, pitch, yaw, vel, angular_vel])
 
     def _compute_done(self, state):
         design_config = self.config.get_design_config()
-        target_state = np.array(
-            [0.0, 0.0, design_config.target_height, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        )
-        tolerance = 1e-2
         (
             pos_x, pos_y, pos_z,
             roll, pitch, yaw,
             vel_x, vel_y, vel_z,
             angular_vel_x, angular_vel_y, angular_vel_z,
-            distance,
         ) = state
 
         max_angle = self.config.max_angle
         max_distance = self.config.max_distance
         horizontal_distance = np.sqrt(pos_x**2 + pos_y**2)
+        vel_mag = np.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
 
-        crash_report = None
+        # Failure conditions
+        if pos_z < 0.5:
+            # Check for success first (soft touchdown overrides crash)
+            if (horizontal_distance < 2.0
+                    and vel_mag < 2.0
+                    and abs(roll) < 15.0
+                    and abs(pitch) < 15.0):
+                return True, 1  # Success
+            return True, 2  # Crash
 
-        if np.allclose(state, target_state, atol=tolerance):
-            crash_report = 1  # Success
-            return True, crash_report
+        if abs(roll) > max_angle:
+            return True, 3  # Roll over
 
-        # Check if crashed (z position too low)
-        elif pos_z < 0.5:
-            crash_report = 2  # Crash
-            return True, crash_report
+        if abs(pitch) > max_angle:
+            return True, 4  # Pitch over
 
-        # Check if rolled over
-        elif abs(roll) > max_angle:
-            crash_report = 3  # Roll over
-            return True, crash_report
+        if horizontal_distance > max_distance:
+            return True, 5  # Out of bounds
 
-        # Check if pitched over
-        elif abs(pitch) > max_angle:
-            crash_report = 4  # Pitch over
-            return True, crash_report
+        # Also check success near ground (above crash threshold)
+        target_height = design_config.target_height
+        if (pos_z < target_height + 0.5
+                and pos_z >= 0.5
+                and horizontal_distance < 2.0
+                and vel_mag < 2.0
+                and abs(roll) < 15.0
+                and abs(pitch) < 15.0):
+            return True, 1  # Success
 
-        # Check if drifted too far from landing pad
-        elif horizontal_distance > max_distance:
-            crash_report = 5  # Out of bounds
-            return True, crash_report
-
-        else:
-            return False, 0
+        return False, 0
 
     def _calculate_reward(self, state):
         """

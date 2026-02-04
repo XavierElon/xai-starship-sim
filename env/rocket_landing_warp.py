@@ -72,15 +72,14 @@ class RocketLanderWarp(EnvBase):
         frame_skip: int = 5,
         starting_height: float = 50.0,
         reset_noise: float = 0.01,
-        # Reward weights
-        w_position: float = 1.0,
-        w_orientation: float = 1.0,
-        w_velocity: float = 1.0,
-        w_angular_velocity: float = 1.0,
-        w_distance: float = 1.0,
+        # Reward weights (exponential shaping, per-step components in [0,1])
+        w_distance: float = 0.7,
+        w_velocity: float = 0.15,
+        w_upright: float = 0.1,
+        w_angular: float = 0.05,
         w_success: float = 100.0,
-        w_crash: float = -50.0,
-        w_tipover: float = -30.0,
+        w_crash: float = -10.0,
+        w_tipover: float = -10.0,
         # Termination
         max_angle: float = 70.0,
         max_distance: float = 20.0,
@@ -96,11 +95,10 @@ class RocketLanderWarp(EnvBase):
 
         # Reward weights as tensors on device
         self._w = {
-            "position": w_position,
-            "orientation": w_orientation,
-            "velocity": w_velocity,
-            "angular_velocity": w_angular_velocity,
             "distance": w_distance,
+            "velocity": w_velocity,
+            "upright": w_upright,
+            "angular": w_angular,
             "success": w_success,
             "crash": w_crash,
             "tipover": w_tipover,
@@ -150,7 +148,7 @@ class RocketLanderWarp(EnvBase):
     def _make_spec(self, td_params=None):
         """Define observation, action, reward, and done specs."""
         self.observation_spec = Composite(
-            observation=Unbounded(shape=(self._num_envs, 13), dtype=torch.float32, device=self._device),
+            observation=Unbounded(shape=(self._num_envs, 12), dtype=torch.float32, device=self._device),
             shape=(self._num_envs,),
         )
         self.action_spec = Composite(
@@ -171,14 +169,14 @@ class RocketLanderWarp(EnvBase):
         )
 
     def _build_obs(self, qpos, qvel):
-        """Build batched 13-dim observations from qpos/qvel tensors.
+        """Build batched 12-dim observations from qpos/qvel tensors.
 
         Args:
             qpos: [N, nq] joint positions
             qvel: [N, nv] joint velocities
 
         Returns:
-            [N, 13] observation tensor
+            [N, 12] observation tensor: [pos(3), euler(3), vel(3), ang_vel(3)]
         """
         pos = qpos[:, :3]  # [N, 3]
         quat = qpos[:, 3:7]  # [N, 4]
@@ -188,17 +186,16 @@ class RocketLanderWarp(EnvBase):
         # Quaternion to euler (degrees)
         euler = _quat_to_euler_batch(quat)  # [N, 3] (roll, pitch, yaw)
 
-        # Distance to target
-        target = torch.tensor([0.0, 0.0, self._target_height], device=self._device)
-        distance = torch.norm(pos - target, dim=-1, keepdim=True)  # [N, 1]
-
-        return torch.cat([pos, euler, vel, angular_vel, distance], dim=-1)  # [N, 13]
+        return torch.cat([pos, euler, vel, angular_vel], dim=-1)  # [N, 12]
 
     def _compute_reward(self, obs, done_mask, crash_type):
-        """Compute batched rewards.
+        """Compute batched rewards using exponential shaping.
+
+        All per-step components are in [0, 1] via exp(-k * x), so longer
+        episodes accumulate more reward and the agent is incentivised to survive.
 
         Args:
-            obs: [N, 13] observations
+            obs: [N, 12] observations
             done_mask: [N] bool tensor
             crash_type: [N] int tensor (0=ongoing, 1=success, 2=crash, 3=roll, 4=pitch, 5=oob)
 
@@ -206,36 +203,41 @@ class RocketLanderWarp(EnvBase):
             [N, 1] reward tensor
         """
         pos_x, pos_y, pos_z = obs[:, 0], obs[:, 1], obs[:, 2]
-        roll, pitch, yaw = obs[:, 3], obs[:, 4], obs[:, 5]
+        roll_deg, pitch_deg = obs[:, 3], obs[:, 4]
         vel_x, vel_y, vel_z = obs[:, 6], obs[:, 7], obs[:, 8]
         ang_x, ang_y, ang_z = obs[:, 9], obs[:, 10], obs[:, 11]
-        distance = obs[:, 12]
 
-        # Position reward
-        h_dist = torch.sqrt(pos_x**2 + pos_y**2)
-        pos_reward = (1 - h_dist / 10) + (1 - (pos_z - self._target_height).abs() / self._target_height)
-        pos_reward = pos_reward * self._w["position"]
+        # Distance to target (3D)
+        dist_3d = torch.sqrt(pos_x**2 + pos_y**2 + (pos_z - self._target_height)**2)
+        r_distance = torch.exp(-0.02 * dist_3d)
 
-        # Orientation reward
-        orient_reward = 1 - (roll.abs() + pitch.abs() + yaw.abs()) / (3 * 180.0)
-        orient_reward = orient_reward * self._w["orientation"]
-
-        # Velocity reward
+        # Altitude-gated velocity penalty: free to descend at high alt, penalised near ground
         vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
-        vel_reward = (1 - vel_mag / 10) * self._w["velocity"]
+        alt_ratio = (pos_z / self._starting_height).clamp(0.0, 1.0)
+        r_velocity = torch.exp(-0.5 * vel_mag * (1.0 - alt_ratio))
+
+        # Upright reward (tilt in radians)
+        tilt_rad = (roll_deg.abs() + pitch_deg.abs()) * (torch.pi / 180.0)
+        r_upright = torch.exp(-2.0 * tilt_rad)
 
         # Angular velocity reward
         ang_mag = torch.sqrt(ang_x**2 + ang_y**2 + ang_z**2)
-        ang_reward = (1 - ang_mag / 10) * self._w["angular_velocity"]
+        r_angular = torch.exp(-0.5 * ang_mag)
 
-        # Distance reward
-        dist_reward = (1 - distance / 10) * self._w["distance"]
+        # Weighted sum (weights should sum to 1.0)
+        reward = (
+            self._w["distance"] * r_distance
+            + self._w["velocity"] * r_velocity
+            + self._w["upright"] * r_upright
+            + self._w["angular"] * r_angular
+        )
 
-        # Total base reward
-        reward = pos_reward + orient_reward + vel_reward + ang_reward + dist_reward
+        # Terminal bonuses / penalties
+        # Success: bonus scaled by landing quality
+        success_mask = (crash_type == 1).float()
+        landing_quality = r_distance * r_velocity * r_upright
+        reward = reward + success_mask * self._w["success"] * landing_quality
 
-        # Terminal bonuses
-        reward = reward + (crash_type == 1).float() * self._w["success"]
         reward = reward + (crash_type == 2).float() * self._w["crash"]
         reward = reward + ((crash_type == 3) | (crash_type == 4)).float() * self._w["tipover"]
 
@@ -249,26 +251,34 @@ class RocketLanderWarp(EnvBase):
             truncated: [N] bool
             crash_type: [N] int (0=ongoing, 1=success, 2=crash, 3=roll, 4=pitch, 5=oob)
         """
-        pos_z = obs[:, 2]
+        pos_x, pos_y, pos_z = obs[:, 0], obs[:, 1], obs[:, 2]
         roll = obs[:, 3]
         pitch = obs[:, 4]
-        pos_x, pos_y = obs[:, 0], obs[:, 1]
+        vel_x, vel_y, vel_z = obs[:, 6], obs[:, 7], obs[:, 8]
         h_dist = torch.sqrt(pos_x**2 + pos_y**2)
 
         crash_type = torch.zeros(self._num_envs, dtype=torch.int32, device=self._device)
 
-        # Check conditions (priority order matches original env)
+        # Failure conditions (lower priority assigned first, higher overrides)
         oob = h_dist > self._max_distance
         pitch_over = pitch.abs() > self._max_angle
         roll_over = roll.abs() > self._max_angle
         crashed = pos_z < 0.5
 
-        # Assign crash types (later assignments override earlier ones for same env)
         crash_type = torch.where(oob, torch.tensor(5, device=self._device), crash_type)
         crash_type = torch.where(pitch_over, torch.tensor(4, device=self._device), crash_type)
         crash_type = torch.where(roll_over, torch.tensor(3, device=self._device), crash_type)
         crash_type = torch.where(crashed, torch.tensor(2, device=self._device), crash_type)
-        # Success check omitted (extremely rare with atol=1e-2)
+
+        # Success condition (highest priority — overrides crash when rocket touches down softly)
+        vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
+        near_ground = pos_z < (self._target_height + 0.5)
+        above_crash = pos_z >= 0.5
+        near_pad = h_dist < 2.0
+        slow = vel_mag < 2.0
+        upright = (roll.abs() < 15.0) & (pitch.abs() < 15.0)
+        success = near_ground & above_crash & near_pad & slow & upright
+        crash_type = torch.where(success, torch.tensor(1, device=self._device), crash_type)
 
         terminated = crash_type > 0
         truncated = self._step_count >= self._max_episode_steps

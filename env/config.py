@@ -53,15 +53,17 @@ class DomainRandomizationConfig:
 
 @dataclass
 class RewardWeights:
-    """Weights for different reward components."""
-    position: float = 1.0
-    orientation: float = 1.0
-    velocity: float = 1.0
-    angular_velocity: float = 1.0
-    distance: float = 1.0
-    success_bonus: float = 100.0
-    crash_penalty: float = -50.0
-    tip_over_penalty: float = -30.0
+    """Weights for different reward components.
+
+    Exponential shaping: all per-step components in [0, 1], weights sum to 1.0.
+    """
+    distance: float = 0.7
+    velocity: float = 0.15
+    upright: float = 0.1
+    angular: float = 0.05
+    success: float = 100.0
+    crash: float = -10.0
+    tipover: float = -10.0
 
 
 @dataclass

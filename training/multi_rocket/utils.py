@@ -39,14 +39,13 @@ def env_maker(cfg, curriculum_height=None, num_envs=None):
     if hasattr(cfg.env, "reward_weights"):
         rw_cfg = cfg.env.reward_weights
         rw_map = {
-            "position": "w_position",
-            "orientation": "w_orientation",
-            "velocity": "w_velocity",
-            "angular_velocity": "w_angular_velocity",
             "distance": "w_distance",
-            "success_bonus": "w_success",
-            "crash_penalty": "w_crash",
-            "tip_over_penalty": "w_tipover",
+            "velocity": "w_velocity",
+            "upright": "w_upright",
+            "angular": "w_angular",
+            "success": "w_success",
+            "crash": "w_crash",
+            "tipover": "w_tipover",
         }
         for cfg_key, env_key in rw_map.items():
             if hasattr(rw_cfg, cfg_key):

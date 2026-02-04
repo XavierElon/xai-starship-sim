@@ -181,7 +181,7 @@ def build_actor(action_spec_low, action_spec_high, hidden_sizes, activation, sca
 
 
 def get_obs_for_rocket(data, rocket_idx, nq, nv, target_height):
-    """Extract the 13-dim observation for a single rocket from the multi-body simulation."""
+    """Extract the 12-dim observation for a single rocket from the multi-body simulation."""
     q_offset = 7 * rocket_idx
     v_offset = 6 * rocket_idx
 
@@ -191,11 +191,8 @@ def get_obs_for_rocket(data, rocket_idx, nq, nv, target_height):
     angular_vel = data.qvel[v_offset + 3:v_offset + 6].copy()
 
     roll, pitch, yaw = quaternion_to_euler(quat)
-    target_pos = np.array([pos[0], pos[1], target_height])
-    # Target is directly below the rocket's initial position on the grid
-    distance = np.array([np.linalg.norm(target_pos - pos)])
 
-    return np.concatenate([pos, roll, pitch, yaw, vel, angular_vel, distance]).astype(np.float32)
+    return np.concatenate([pos, roll, pitch, yaw, vel, angular_vel]).astype(np.float32)
 
 
 def main():
@@ -257,7 +254,7 @@ def main():
     actor = build_actor(action_low, action_high, hidden_sizes, activation, scale_mapping, scale_lb)
 
     # Initialize with dummy forward pass, then load weights
-    dummy_obs = torch.zeros(1, 13)
+    dummy_obs = torch.zeros(1, 12)
     from tensordict import TensorDict
     dummy_td = TensorDict({"observation": dummy_obs}, batch_size=[1])
     with torch.no_grad(), set_exploration_type(ExplorationType.RANDOM):
