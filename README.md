@@ -28,27 +28,44 @@ export MUJOCO_GL=egl  # headless rendering
 
 ## Training
 
+### Single Rocket (CPU)
+
 ```bash
-# Standard training (CPU)
-cd sac && python sac.py
+# Standard training
+cd training/single_rocket && python train.py
 
 # With curriculum learning
-cd sac && python sac.py env.curriculum.enabled=true
+cd training/single_rocket && python train.py env.curriculum.enabled=true
 
 # Override parameters
-cd sac && python sac.py collector.total_frames=500000 optim.lr=1e-4
+cd training/single_rocket && python train.py collector.total_frames=500000 optim.lr=1e-4
 ```
 
-Checkpoints are saved to `checkpoints/` at each evaluation step and at the end of training.
+Checkpoints are saved to `training/single_rocket/checkpoints/`.
+
+### Multi Rocket (GPU, MuJoCo Warp)
+
+```bash
+# GPU-parallel training (4096 environments)
+cd training/multi_rocket && python train.py
+
+# Override number of environments
+cd training/multi_rocket && python train.py env.num_envs=8192
+```
+
+Checkpoints are saved to `training/multi_rocket/checkpoints/`.
 
 ## Evaluation
 
 ```bash
-# Render high-quality videos from a checkpoint
-python sac/eval.py --checkpoint checkpoints/final.pt --resolution 720 --episodes 5
+# Render high-quality videos from a single-rocket checkpoint
+python training/single_rocket/eval.py --checkpoint training/single_rocket/checkpoints/final.pt --resolution 720 --episodes 5
+
+# Evaluate a warp-trained checkpoint (renders via CPU env)
+python training/multi_rocket/eval.py --checkpoint training/multi_rocket/checkpoints/final.pt --resolution 720 --episodes 5
 
 # Multi-rocket visualization (100 rockets landing simultaneously)
-python env/multi_rocket_viz.py --checkpoint checkpoints/final.pt --num-rockets 100 --resolution 1080
+python env/multi_rocket_viz.py --checkpoint training/single_rocket/checkpoints/final.pt --num-rockets 100 --resolution 1080
 ```
 
 ## GPU Environment (MuJoCo Warp)
@@ -63,18 +80,26 @@ python env/rocket_landing_warp.py  # benchmark: ~1.2M steps/sec on RTX 4060
 ## Project Structure
 
 ```
-sac/                        # SAC training
-  sac.py                    # Training script (Hydra + TorchRL)
-  eval.py                   # Checkpoint evaluation with video rendering
-  utils.py                  # Environment/model creation utilities
-  config.yaml               # Hydra configuration
-env/                        # Environments
-  rocket_landing.py         # Gymnasium MuJoCo environment (CPU)
-  rocket_landing_warp.py    # MuJoCo Warp environment (GPU, batched)
-  multi_rocket_viz.py       # Multi-rocket visualization
-  config.py                 # Configuration dataclasses
-  rewards.py                # Modular reward calculator
-  xml_files/                # MuJoCo XML model files
-rocket_designs/             # Design documentation and screenshots
-LOGBOOK.md                  # Development log and experiment history
+training/
+  single_rocket/              # CPU-based SAC training (single env)
+    train.py                  # Training script (Hydra + TorchRL)
+    eval.py                   # Checkpoint evaluation with video rendering
+    utils.py                  # Environment/model creation utilities
+    config.yaml               # Hydra configuration
+    checkpoints/              # Saved checkpoints
+  multi_rocket/               # GPU-parallel SAC training (MuJoCo Warp)
+    train.py                  # GPU training script
+    eval.py                   # Checkpoint evaluation
+    utils.py                  # Warp env utilities
+    config.yaml               # GPU training configuration
+    checkpoints/              # Saved checkpoints
+env/                          # Shared environments
+  rocket_landing.py           # Gymnasium MuJoCo environment (CPU)
+  rocket_landing_warp.py      # MuJoCo Warp environment (GPU, batched)
+  multi_rocket_viz.py         # Multi-rocket visualization
+  config.py                   # Configuration dataclasses
+  rewards.py                  # Modular reward calculator
+  xml_files/                  # MuJoCo XML model files
+rocket_designs/               # Design documentation and screenshots
+LOGBOOK.md                    # Development log and experiment history
 ```

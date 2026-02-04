@@ -19,10 +19,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gpu = [
+    "mujoco-warp",
+]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.8.0",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["env"]
 
 [tool.ruff]
 line-length = 100

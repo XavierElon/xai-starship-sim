@@ -162,6 +162,33 @@ python env/multi_rocket_viz.py --checkpoint checkpoints/eval_980000.pt --num-roc
 
 ---
 
+## Phase 6: Repository Reorganization
+
+### Training Directory Structure
+Reorganized the project from a flat `sac/` directory into dedicated training setups under `training/`:
+
+```
+training/
+  single_rocket/    # CPU-based, single env (was sac/)
+    train.py        # Renamed from sac.py
+    eval.py, utils.py, config.yaml
+    checkpoints/    # Moved from top-level checkpoints/
+  multi_rocket/     # GPU-parallel, MuJoCo Warp (NEW)
+    train.py, eval.py, utils.py, config.yaml
+    checkpoints/
+```
+
+**Why:** Each training setup (CPU single-env vs GPU 4096-env) has different configs, utilities, and env wrappers. Keeping them self-contained makes it easy to version, test, and iterate on each independently. The shared `env/` directory remains unchanged — both setups import from it.
+
+**Multi-rocket training setup:** The new `training/multi_rocket/` wires up `RocketLanderWarp` (the GPU batched env from Phase 5) to the SAC training loop. Key differences from single_rocket:
+- No `GymWrapper` needed — `RocketLanderWarp` is already a TorchRL `EnvBase`
+- No `ParallelEnv` — the Warp env handles batching internally
+- Larger batch size (1024), higher UTD ratio (4.0) for GPU throughput
+- No video logging (Warp env doesn't render pixels)
+- Eval uses CPU `RocketLander` for video rendering of GPU-trained policies
+
+---
+
 ## Future Improvements
 
 - [ ] **Wire up GPU training**: Connect `RocketLanderWarp` to SAC training loop for end-to-end GPU training

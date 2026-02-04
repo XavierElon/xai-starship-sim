@@ -1,9 +1,9 @@
 """Evaluate a trained SAC checkpoint and render high-quality videos.
 
 Usage:
-    python sac/eval.py --checkpoint checkpoints/final.pt
-    python sac/eval.py --checkpoint checkpoints/eval_500000.pt --resolution 1080 --episodes 5
-    python sac/eval.py --checkpoint checkpoints/final.pt --rocket-design v2 --height 50
+    python training/single_rocket/eval.py --checkpoint training/single_rocket/checkpoints/final.pt
+    python training/single_rocket/eval.py --checkpoint training/single_rocket/checkpoints/eval_500000.pt --resolution 1080 --episodes 5
+    python training/single_rocket/eval.py --checkpoint training/single_rocket/checkpoints/final.pt --rocket-design v2 --height 50
 """
 
 import argparse
@@ -29,7 +29,7 @@ from torchrl.modules import MLP, ProbabilisticActor, ValueOperator
 from torchrl.modules.distributions import TanhNormal
 
 # Add project root to path
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 

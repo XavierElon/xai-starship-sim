@@ -122,7 +122,7 @@ def env_maker(cfg, device="cpu", from_pixels=False, curriculum_height=None):
         )
     elif lib == "custom":
         if cfg.env.name == "rocket_lander_v0":
-            root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
             if root_dir not in sys.path:
                 sys.path.append(root_dir)
             from env.rocket_landing import RocketLander
