@@ -144,6 +144,10 @@ pytest.ini
 
 MUJOCO_LOG.TXT
 
+# Training artifacts
+checkpoints/
+videos/
+
 # uv
 uv.lock
 

@@ -251,6 +251,10 @@ def main(cfg: "DictConfig"):  # noqa: F821
         optimizer_alpha,
     ) = make_sac_optimizer(cfg, loss_module)
 
+    # Create checkpoint directory
+    checkpoint_dir = os.path.join(project_root, "checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
     # Main loop
     start_time = time.time()
     collected_frames = 0
@@ -506,6 +510,16 @@ def main(cfg: "DictConfig"):  # noqa: F821
                         total_thrust = float(np.sum(np.abs(actions)))
                         metrics_to_log["eval/total_thrust"] = total_thrust
 
+            # Save checkpoint at each evaluation
+            if abs(collected_frames % eval_iter) < frames_per_batch:
+                ckpt_path = os.path.join(checkpoint_dir, f"eval_{collected_frames}.pt")
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'collected_frames': collected_frames,
+                    'config': dict(cfg),
+                }, ckpt_path)
+                torchrl_logger.info(f"Saved checkpoint: {ckpt_path}")
+
             if logger is not None:
                 log_metrics(logger, metrics_to_log, collected_frames)
                 # Log video directly with wandb - bypass TorchRL logger
@@ -519,6 +533,15 @@ def main(cfg: "DictConfig"):  # noqa: F821
         # If we didn't break due to curriculum, the collector is exhausted
         if not curriculum_restart:
             break
+
+    # Save final checkpoint
+    final_ckpt_path = os.path.join(checkpoint_dir, "final.pt")
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'collected_frames': collected_frames,
+        'config': dict(cfg),
+    }, final_ckpt_path)
+    torchrl_logger.info(f"Saved final checkpoint: {final_ckpt_path}")
 
     # Cleanup
     collector.shutdown()
