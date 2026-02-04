@@ -219,12 +219,28 @@ cd training/multi_rocket && python train_ppo.py
 
 ---
 
+## TODO: PPO Hyperparameter Tuning (seed sensitivity)
+
+5-seed sweep (seeds 1-5, 50M frames each) showed only 2/5 seeds converge to ~900 reward.
+The other 3 plateau around 600 (gets partway down but doesn't land). Seed 42 (default) works reliably.
+
+**Tune these to improve convergence consistency:**
+- [ ] **Entropy coefficient**: Currently 0.01 — try 0.02-0.05 to prevent early policy collapse
+- [ ] **LR annealing**: Currently linear decay to 0 — try cosine schedule or slower warmup
+- [ ] **Clip epsilon annealing**: Currently disabled — try enabling to tighten updates late in training
+- [ ] **GAE lambda**: Currently 0.95 — try 0.97 for longer-horizon credit assignment
+- [ ] **Mini-batch size**: Currently 4096 — try larger (8192) for more stable gradients
+- [ ] **PPO epochs**: Currently 4 — try 8-10 with smaller clip epsilon
+- [ ] **Total frames**: 50M may not be enough for slow seeds — try 100M
+
+W&B group: `ppo_v2_5seeds` (seed 5 and seed 2 solved, seeds 1/3/4 stuck at ~600)
+
+---
+
 ## Future Improvements
 
-- [ ] **Wire up GPU training**: Connect `RocketLanderWarp` to SAC training loop for end-to-end GPU training
 - [x] **PPO for massive parallelism**: Added PPO training setup in `training/multi_rocket/` (Phase 7)
 - [ ] **Curriculum on GPU**: Implement curriculum height changes in the Warp environment
-- [ ] **v2 design training**: Train with the tripod rocket for better landing stability
 - [ ] **Sim-to-real considerations**: Widen domain randomization after initial convergence
 - [ ] **Thrust vectoring**: Add gimbal actuators for more realistic engine control
 - [ ] **Multi-stage landing**: Boostback burn -> entry burn -> landing burn sequence

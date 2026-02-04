@@ -289,13 +289,6 @@ def main(cfg: "DictConfig"):  # noqa: F821
                 metrics_to_log["eval/time"] = eval_time
                 metrics_to_log["eval/episode_length"] = eval_episode_length
 
-                if ("next", "crash_report") in eval_rollout.keys(True):
-                    # Last timestep's crash report (single eval env: shape [1, T])
-                    final_crash = eval_rollout["next", "crash_report"][0, -1].item()
-                    crash_name = CRASH_REPORT_NAMES.get(int(final_crash), "unknown")
-                    metrics_to_log["eval/outcome"] = final_crash
-                    metrics_to_log[f"eval/outcome_{crash_name}"] = 1
-
                 # Detailed eval metrics (single eval env: shape [1, T, ...])
                 final_obs = eval_rollout["next", "observation"][0, -1]
                 pos = final_obs[:3].cpu().numpy()

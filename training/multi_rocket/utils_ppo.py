@@ -5,7 +5,8 @@ import sys
 import torch
 import torch.nn
 from tensordict.nn import AddStateIndependentNormalScale, TensorDictModule
-from torchrl.envs import ExplorationType
+from torchrl.envs import Compose, ExplorationType, TransformedEnv
+from torchrl.envs.transforms import StepCounter, InitTracker, RewardSum, DoubleToFloat
 from torchrl.modules import MLP, ProbabilisticActor, TanhNormal, ValueOperator
 
 # Add project root to path
@@ -13,11 +14,100 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-# Reuse env utilities from SAC setup
-from utils import env_maker, apply_env_transforms, make_environment, log_metrics, get_activation  # noqa: E402
 
-from torchrl.envs import Compose, TransformedEnv
-from torchrl.envs.transforms import StepCounter, InitTracker, RewardSum, DoubleToFloat
+# ====================================================================
+# General utils
+# ====================================================================
+
+
+def log_metrics(logger, metrics, step):
+    for metric_name, metric_value in metrics.items():
+        logger.log_scalar(metric_name, metric_value, step)
+
+
+def get_activation(cfg):
+    if cfg.network.activation == "relu":
+        return torch.nn.ReLU
+    elif cfg.network.activation == "tanh":
+        return torch.nn.Tanh
+    elif cfg.network.activation == "leaky_relu":
+        return torch.nn.LeakyReLU
+    else:
+        raise NotImplementedError(f"Unknown activation: {cfg.network.activation}")
+
+
+# ====================================================================
+# Environment utils
+# ====================================================================
+
+
+def env_maker(cfg, curriculum_height=None, num_envs=None):
+    """Create a RocketLanderWarp environment (already a TorchRL EnvBase)."""
+    from env.rocket_landing_warp import RocketLanderWarp
+
+    device = cfg.network.device or "cuda"
+
+    rw = {}
+    if hasattr(cfg.env, "reward_weights"):
+        rw_cfg = cfg.env.reward_weights
+        rw_map = {
+            "distance": "w_distance",
+            "velocity": "w_velocity",
+            "upright": "w_upright",
+            "angular": "w_angular",
+            "success": "w_success",
+            "crash": "w_crash",
+            "tipover": "w_tipover",
+        }
+        for cfg_key, env_key in rw_map.items():
+            if hasattr(rw_cfg, cfg_key):
+                rw[env_key] = getattr(rw_cfg, cfg_key)
+
+    term_kwargs = {}
+    if hasattr(cfg.env, "termination"):
+        term_cfg = cfg.env.termination
+        if hasattr(term_cfg, "max_distance"):
+            term_kwargs["max_distance"] = term_cfg.max_distance
+        if hasattr(term_cfg, "max_angle"):
+            term_kwargs["max_angle"] = term_cfg.max_angle
+
+    rocket_design = "v0"
+    if hasattr(cfg.env, "rocket") and hasattr(cfg.env.rocket, "design"):
+        rocket_design = cfg.env.rocket.design
+
+    env = RocketLanderWarp(
+        num_envs=num_envs if num_envs is not None else cfg.env.num_envs,
+        rocket_design=rocket_design,
+        device=device,
+        max_episode_steps=cfg.env.max_episode_steps,
+        starting_height=curriculum_height or 50.0,
+        **rw,
+        **term_kwargs,
+    )
+    return env
+
+
+def apply_env_transforms(env, max_episode_steps):
+    transformed_env = TransformedEnv(
+        env,
+        Compose(
+            StepCounter(max_steps=max_episode_steps),
+            InitTracker(),
+            RewardSum(),
+        ),
+    )
+    return transformed_env
+
+
+def make_environment(cfg, logger=None, curriculum_height=None):
+    """Make environments for training and evaluation."""
+    train_env = env_maker(cfg, curriculum_height=curriculum_height)
+    train_env = apply_env_transforms(train_env, cfg.env.max_episode_steps)
+
+    eval_env = env_maker(cfg, curriculum_height=curriculum_height, num_envs=1)
+    eval_env = apply_env_transforms(eval_env, cfg.env.max_episode_steps)
+
+    return train_env, eval_env
 
 
 def make_render_env(cfg):

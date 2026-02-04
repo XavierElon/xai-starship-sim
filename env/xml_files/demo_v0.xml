@@ -1,0 +1,104 @@
+<mujoco model="rocket_showcase">
+    <option timestep="0.005"/>
+
+    <!-- Visual settings: sky background -->
+    <visual>
+        <global offwidth="1920" offheight="1080"/>
+        <rgba fog="0.6 0.8 1.0 1"/>
+    </visual>
+
+    <!-- Assets -->
+    <asset>
+        <texture name="sky" type="skybox" builtin="gradient" rgb1="0.4 0.6 0.9" rgb2="0.8 0.9 1.0" width="512" height="512"/>
+        <texture name="spacex_x" type="2d" file="spaceX_Xonly_logo.png"/>
+
+        <material name="ocean" rgba="0.05 0.1 0.3 1" reflectance="0.3" shininess="0.8" specular="0.5"/>
+        <material name="barge_deck" rgba="0.35 0.35 0.35 1" reflectance="0.1"/>
+        <material name="barge_border" rgba="0.25 0.25 0.25 1"/>
+        <material name="logo_mat" texture="spacex_x" rgba="1 1 1 1" emission="0.3"/>
+        <material name="target_material" rgba="1 0 0 0.3"/>
+        <material name="rocket_body" rgba="1 1 1 1" emission="1"/>
+        <material name="rocket_dark" rgba="0.3 0.3 0.3 1" emission="0.5"/>
+        <material name="leg_material" rgba="0.4 0.4 0.4 1" emission="0.5"/>
+    </asset>
+
+    <!-- Worldbody -->
+    <worldbody>
+        <!-- Ocean floor -->
+        <geom name="floor" type="plane" pos="0 0 -0.3" size="200 200 0.1" material="ocean"/>
+
+        <!-- General diffuse lighting -->
+        <light name="light" pos="0 0 100" dir="0 0 -1" diffuse="0.8 0.8 0.8" ambient="0.4 0.4 0.4" castshadow="false"/>
+
+        <!-- Landing barge -->
+        <body name="barge" pos="0 0 0">
+            <!-- Main deck -->
+            <geom name="barge_deck" type="box" size="3 3 0.15" pos="0 0 -0.15" material="barge_deck"/>
+
+            <!-- Deck border rails -->
+            <geom name="border_front" type="box" size="3 0.06 0.2" pos="0 3 -0.1" material="barge_border" contype="0" conaffinity="0"/>
+            <geom name="border_back" type="box" size="3 0.06 0.2" pos="0 -3 -0.1" material="barge_border" contype="0" conaffinity="0"/>
+            <geom name="border_left" type="box" size="0.06 3 0.2" pos="-3 0 -0.1" material="barge_border" contype="0" conaffinity="0"/>
+            <geom name="border_right" type="box" size="0.06 3 0.2" pos="3 0 -0.1" material="barge_border" contype="0" conaffinity="0"/>
+
+            <!-- SpaceX X logo on deck -->
+            <geom name="logo" type="box" size="1.2 1.2 0.002" pos="0 0 0.003" material="logo_mat" contype="0" conaffinity="0"/>
+
+            <!-- Target circle (invisible, for env compatibility) -->
+            <geom name="target_circle" type="cylinder" size="1.5 0.001" pos="0 0 0.01" rgba="0 0 0 0" contype="0" conaffinity="0"/>
+        </body>
+
+        <!-- Target cross (invisible, for env compatibility) -->
+        <geom name="target_x1" type="box" size="0.75 0.05 0.001" pos="0 0 0.012" rgba="0 0 0 0" contype="0" conaffinity="0"/>
+        <geom name="target_x2" type="box" size="0.05 0.75 0.001" pos="0 0 0.012" rgba="0 0 0 0" contype="0" conaffinity="0"/>
+
+        <!-- Rocket (v2 tripod design - matching rocket_v2_three_legs.xml physics) -->
+        <body name="rocket" pos="0 0 50">
+            <joint name="rocket_free" type="free"/>
+
+            <!-- Main body -->
+            <geom name="rocket_body_main" type="cylinder" size="0.15 1.5" pos="0 0 0" material="rocket_body" mass="8"/>
+
+            <!-- Nose cone -->
+            <geom name="nose_cone" type="capsule" size="0.15 0.3" pos="0 0 1.8" material="rocket_body" mass="0.5"/>
+
+            <!-- Black interstage band -->
+            <geom name="interstage" type="cylinder" size="0.155 0.1" pos="0 0 0.8" material="rocket_dark" mass="0.1"/>
+
+            <!-- Engine section -->
+            <geom name="engine_section" type="cylinder" size="0.18 0.3" pos="0 0 -1.2" material="rocket_dark" mass="0.3"/>
+
+            <!-- Landing Leg 1: 0° (positive X) -->
+            <body name="leg1" pos="0.15 0 -1.3">
+                <geom name="leg1_upper" type="capsule" size="0.02 0.4" pos="0.25 0 0.15" euler="0 -50 0" material="leg_material" mass="0.12"/>
+                <geom name="leg1_lower" type="capsule" size="0.025 0.35" pos="0.55 0 -0.25" euler="0 -20 0" material="leg_material" mass="0.1"/>
+                <geom name="leg1_foot" type="sphere" size="0.06" pos="0.7 0 -0.55" material="leg_material" mass="0.05"/>
+            </body>
+
+            <!-- Landing Leg 2: 120° -->
+            <body name="leg2" pos="-0.075 0.13 -1.3" euler="0 0 120">
+                <geom name="leg2_upper" type="capsule" size="0.02 0.4" pos="0.25 0 0.15" euler="0 -50 0" material="leg_material" mass="0.12"/>
+                <geom name="leg2_lower" type="capsule" size="0.025 0.35" pos="0.55 0 -0.25" euler="0 -20 0" material="leg_material" mass="0.1"/>
+                <geom name="leg2_foot" type="sphere" size="0.06" pos="0.7 0 -0.55" material="leg_material" mass="0.05"/>
+            </body>
+
+            <!-- Landing Leg 3: 240° -->
+            <body name="leg3" pos="-0.075 -0.13 -1.3" euler="0 0 240">
+                <geom name="leg3_upper" type="capsule" size="0.02 0.4" pos="0.25 0 0.15" euler="0 -50 0" material="leg_material" mass="0.12"/>
+                <geom name="leg3_lower" type="capsule" size="0.025 0.35" pos="0.55 0 -0.25" euler="0 -20 0" material="leg_material" mass="0.1"/>
+                <geom name="leg3_foot" type="sphere" size="0.06" pos="0.7 0 -0.55" material="leg_material" mass="0.05"/>
+            </body>
+
+            <!-- Thruster site -->
+            <site name="thruster_site" pos="0 0 -1.5" size="0.05" rgba="1 0.5 0 1"/>
+            <site name="gyro_site" pos="0 0 0" size="0.1"/>
+        </body>
+    </worldbody>
+
+    <!-- Actuators (identical to rocket_v2_three_legs.xml) -->
+    <actuator>
+        <motor name="thrust_x" site="thruster_site" gear="25 0 0 0 0 0" ctrllimited="true" ctrlrange="-1 1"/>
+        <motor name="thrust_y" site="thruster_site" gear="0 25 0 0 0 0" ctrllimited="true" ctrlrange="-1 1"/>
+        <motor name="thrust_z" site="thruster_site" gear="0 0 200 0 0 0" ctrllimited="true" ctrlrange="0 1"/>
+    </actuator>
+</mujoco>

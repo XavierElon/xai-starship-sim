@@ -1,7 +1,7 @@
 [project]
 name = "spacex-landing"
 version = "0.1.0"
-description = "SpaceX-style rocket landing simulator using MuJoCo and SAC reinforcement learning"
+description = "SpaceX-style rocket landing simulator using MuJoCo and PPO reinforcement learning"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

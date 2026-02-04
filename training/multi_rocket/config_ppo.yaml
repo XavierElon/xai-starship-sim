@@ -8,7 +8,7 @@ env:
 
   # Rocket design and configuration
   rocket:
-    design: v0  # v0 (cylinder), v1 (two_legs), v2 (tripod)
+    design: v0  # v0 (cylinder) for fast training; demo uses v2 (tripod) visuals
 
   # Reward weights (exponential shaping, per-step components in [0,1])
   reward_weights:
