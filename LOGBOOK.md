@@ -349,3 +349,13 @@ cd training/multi_rocket && uv run python sweep_ppo.py --v2  # v2 (clip_anneal c
 - [ ] **Thrust vectoring**: Add gimbal actuators for more realistic engine control
 - [ ] **Multi-stage landing**: Boostback burn -> entry burn -> landing burn sequence
 - [ ] **Wind disturbances**: Add random lateral forces during descent
+
+---
+
+## TODO (2026-02-06)
+
+- [ ] **Run training with tightened success condition**: Success zone changed from `target_height + 0.5` to `target_height + 0.15`. This should make the rocket actually land instead of hovering 0.5m above ground.
+  ```bash
+  cd training/multi_rocket && uv run python train_ppo.py env.seed=0 logger.group_name=demo_model_tight logger.exp_name=demo_tight_seed0
+  ```
+- [ ] **Update LOGBOOK with training speed comparison**: Document PPO multi-env training speed (~75k it/s, 11 min for 50M frames)
