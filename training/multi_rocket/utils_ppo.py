@@ -75,6 +75,26 @@ def env_maker(cfg, curriculum_height=None, num_envs=None):
     if hasattr(cfg.env, "rocket") and hasattr(cfg.env.rocket, "design"):
         rocket_design = cfg.env.rocket.design
 
+    reset_noise_kwargs = {}
+    if hasattr(cfg.env, "reset_noise"):
+        rn_cfg = cfg.env.reset_noise
+        if hasattr(rn_cfg, "pos"):
+            reset_noise_kwargs["reset_pos_noise"] = rn_cfg.pos
+        if hasattr(rn_cfg, "vel"):
+            reset_noise_kwargs["reset_vel_noise"] = rn_cfg.vel
+        if hasattr(rn_cfg, "ang"):
+            reset_noise_kwargs["reset_ang_noise"] = rn_cfg.ang
+        if hasattr(rn_cfg, "angvel"):
+            reset_noise_kwargs["reset_angvel_noise"] = rn_cfg.angvel
+
+    vel_penalty_kwargs = {}
+    if hasattr(cfg.env, "velocity_penalty"):
+        vp_cfg = cfg.env.velocity_penalty
+        if hasattr(vp_cfg, "gate_scale"):
+            vel_penalty_kwargs["vel_gate_scale"] = vp_cfg.gate_scale
+        if hasattr(vp_cfg, "coeff"):
+            vel_penalty_kwargs["vel_penalty_coeff"] = vp_cfg.coeff
+
     env = RocketLanderWarp(
         num_envs=num_envs if num_envs is not None else cfg.env.num_envs,
         rocket_design=rocket_design,
@@ -83,6 +103,8 @@ def env_maker(cfg, curriculum_height=None, num_envs=None):
         starting_height=curriculum_height or 50.0,
         **rw,
         **term_kwargs,
+        **reset_noise_kwargs,
+        **vel_penalty_kwargs,
     )
     return env
 

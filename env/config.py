@@ -32,6 +32,7 @@ ROCKET_DESIGNS: Dict[str, RocketDesignConfig] = {
     "v0": RocketDesignConfig("single_rocket_test.xml", 1.0, "cylinder"),
     "v1": RocketDesignConfig("rocket_v1_landing_legs.xml", 1.85, "two_legs"),  # Unstable (2 legs)
     "v2": RocketDesignConfig("rocket_v2_three_legs.xml", 1.93, "tripod"),
+    "demo": RocketDesignConfig("demo_v0.xml", 1.93, "detailed_tripod"),
 }
 
 

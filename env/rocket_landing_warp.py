@@ -71,7 +71,11 @@ class RocketLanderWarp(EnvBase):
         max_episode_steps: int = 1000,
         frame_skip: int = 5,
         starting_height: float = 50.0,
-        reset_noise: float = 0.01,
+        # Reset noise (domain randomization for initial conditions)
+        reset_pos_noise: float = 3.0,  # xy position noise in meters
+        reset_vel_noise: float = 3.0,  # linear velocity noise in m/s
+        reset_ang_noise: float = 0.15,  # angular noise in radians (~8 degrees)
+        reset_angvel_noise: float = 0.3,  # angular velocity noise in rad/s
         # Reward weights (exponential shaping, per-step components in [0,1])
         w_distance: float = 0.7,
         w_velocity: float = 0.15,
@@ -80,6 +84,9 @@ class RocketLanderWarp(EnvBase):
         w_success: float = 100.0,
         w_crash: float = -10.0,
         w_tipover: float = -10.0,
+        # Velocity penalty shaping (exponential gate near ground)
+        vel_gate_scale: float = 10.0,  # height scale for danger zone (meters)
+        vel_penalty_coeff: float = 1.0,  # steepness of velocity penalty
         # Termination
         max_angle: float = 70.0,
         max_distance: float = 20.0,
@@ -89,9 +96,14 @@ class RocketLanderWarp(EnvBase):
         self._max_episode_steps = max_episode_steps
         self._frame_skip = frame_skip
         self._starting_height = starting_height
-        self._reset_noise = reset_noise
+        self._reset_pos_noise = reset_pos_noise
+        self._reset_vel_noise = reset_vel_noise
+        self._reset_ang_noise = reset_ang_noise
+        self._reset_angvel_noise = reset_angvel_noise
         self._max_angle = max_angle
         self._max_distance = max_distance
+        self._vel_gate_scale = vel_gate_scale
+        self._vel_penalty_coeff = vel_penalty_coeff
 
         # Reward weights as tensors on device
         self._w = {
@@ -168,6 +180,24 @@ class RocketLanderWarp(EnvBase):
             shape=(self._num_envs,),
         )
 
+    def _quat_mul(self, q1, q2):
+        """Batched quaternion multiplication q1 * q2.
+
+        Args:
+            q1, q2: [N, 4] quaternions (w, x, y, z)
+
+        Returns:
+            [N, 4] quaternion product
+        """
+        w1, x1, y1, z1 = q1.unbind(-1)
+        w2, x2, y2, z2 = q2.unbind(-1)
+        return torch.stack([
+            w1*w2 - x1*x2 - y1*y2 - z1*z2,
+            w1*x2 + x1*w2 + y1*z2 - z1*y2,
+            w1*y2 - x1*z2 + y1*w2 + z1*x2,
+            w1*z2 + x1*y2 - y1*x2 + z1*w2,
+        ], dim=-1)
+
     def _build_obs(self, qpos, qvel):
         """Build batched 12-dim observations from qpos/qvel tensors.
 
@@ -211,10 +241,12 @@ class RocketLanderWarp(EnvBase):
         dist_3d = torch.sqrt(pos_x**2 + pos_y**2 + (pos_z - self._target_height)**2)
         r_distance = torch.exp(-0.02 * dist_3d)
 
-        # Altitude-gated velocity penalty: free to descend at high alt, penalised near ground
+        # Velocity penalty: safe speed depends on altitude
+        # At high altitude: allow fast descent. Near ground: must be slow.
         vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
-        alt_ratio = (pos_z / self._starting_height).clamp(0.0, 1.0)
-        r_velocity = torch.exp(-0.5 * vel_mag * (1.0 - alt_ratio))
+        safe_vel = 2.0 + pos_z * 0.4  # At z=50m: 22 m/s ok. At z=5m: 4 m/s ok. At z=0: 2 m/s
+        excess_vel = torch.clamp(vel_mag - safe_vel, min=0.0)
+        r_velocity = torch.exp(-self._vel_penalty_coeff * excess_vel)
 
         # Upright reward (tilt in radians)
         tilt_rad = (roll_deg.abs() + pitch_deg.abs()) * (torch.pi / 180.0)
@@ -272,7 +304,7 @@ class RocketLanderWarp(EnvBase):
 
         # Success condition (highest priority — overrides crash when rocket touches down softly)
         vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
-        near_ground = pos_z < (self._target_height + 0.5)
+        near_ground = pos_z < (self._target_height + 0.15)
         above_crash = pos_z >= 0.5
         near_pad = h_dist < 2.0
         slow = vel_mag < 2.0
@@ -313,15 +345,33 @@ class RocketLanderWarp(EnvBase):
 
         # Reset qpos to initial + noise
         init_qpos = self._init_qpos.unsqueeze(0).expand(self._num_envs, -1)
-        noise_qpos = torch.randn_like(qpos) * self._reset_noise
-        new_qpos = init_qpos + noise_qpos
-        # Override height with starting height
+        new_qpos = init_qpos.clone()
+
+        # Add xy position noise (start offset from target)
+        new_qpos[:, 0] += torch.randn(self._num_envs, device=self._device) * self._reset_pos_noise
+        new_qpos[:, 1] += torch.randn(self._num_envs, device=self._device) * self._reset_pos_noise
+        # Set height to starting height (no noise on z)
         new_qpos[:, 2] = self._starting_height
-        # Keep quaternion normalized
+
+        # Add angular noise via small euler perturbation to quaternion
+        # Generate small random euler angles and convert to quaternion perturbation
+        ang_noise = torch.randn(self._num_envs, 3, device=self._device) * self._reset_ang_noise
+        # Simple axis-angle to quaternion for small angles: q ≈ [1, θ/2]
+        half_ang = ang_noise * 0.5
+        noise_quat = torch.cat([
+            torch.ones(self._num_envs, 1, device=self._device),
+            half_ang
+        ], dim=-1)
+        noise_quat = torch.nn.functional.normalize(noise_quat, dim=-1)
+        # Quaternion multiply: q_new = q_noise * q_init (apply perturbation)
+        q0 = new_qpos[:, 3:7]
+        new_qpos[:, 3:7] = self._quat_mul(noise_quat, q0)
         new_qpos[:, 3:7] = torch.nn.functional.normalize(new_qpos[:, 3:7], dim=-1)
 
-        # Reset qvel to zero + small noise
-        new_qvel = torch.randn_like(qvel) * self._reset_noise
+        # Reset qvel with separate linear and angular noise
+        new_qvel = torch.zeros_like(qvel)
+        new_qvel[:, :3] = torch.randn(self._num_envs, 3, device=self._device) * self._reset_vel_noise
+        new_qvel[:, 3:6] = torch.randn(self._num_envs, 3, device=self._device) * self._reset_angvel_noise
 
         # Apply only to masked environments
         qpos[env_mask] = new_qpos[env_mask]

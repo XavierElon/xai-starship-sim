@@ -290,7 +290,8 @@ def main(cfg: "DictConfig"):  # noqa: F821
                 metrics_to_log["eval/episode_length"] = eval_episode_length
 
                 # Detailed eval metrics (single eval env: shape [1, T, ...])
-                final_obs = eval_rollout["next", "observation"][0, -1]
+                # Use "observation" not "next/observation" to get state before reset
+                final_obs = eval_rollout["observation"][0, -1]
                 pos = final_obs[:3].cpu().numpy()
                 vel = final_obs[6:9].cpu().numpy()
                 metrics_to_log["eval/final_horizontal_error"] = float(

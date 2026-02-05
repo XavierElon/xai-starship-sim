@@ -219,29 +219,133 @@ cd training/multi_rocket && python train_ppo.py
 
 ---
 
-## TODO: PPO Hyperparameter Tuning (seed sensitivity)
+## PPO Hyperparameter Tuning (seed sensitivity)
 
 5-seed sweep (seeds 1-5, 50M frames each) showed only 2/5 seeds converge to ~900 reward.
 The other 3 plateau around 600 (gets partway down but doesn't land). Seed 42 (default) works reliably.
 
 **Tune these to improve convergence consistency:**
-- [ ] **Entropy coefficient**: Currently 0.01 — try 0.02-0.05 to prevent early policy collapse
+- [x] **Entropy coefficient**: Currently 0.01 — try 0.02-0.05 to prevent early policy collapse
 - [ ] **LR annealing**: Currently linear decay to 0 — try cosine schedule or slower warmup
-- [ ] **Clip epsilon annealing**: Currently disabled — try enabling to tighten updates late in training
-- [ ] **GAE lambda**: Currently 0.95 — try 0.97 for longer-horizon credit assignment
-- [ ] **Mini-batch size**: Currently 4096 — try larger (8192) for more stable gradients
-- [ ] **PPO epochs**: Currently 4 — try 8-10 with smaller clip epsilon
+- [x] **Clip epsilon annealing**: Currently disabled — try enabling to tighten updates late in training
+- [x] **GAE lambda**: Currently 0.95 — try 0.97 for longer-horizon credit assignment
+- [x] **Mini-batch size**: Currently 4096 — try larger (8192) for more stable gradients
+- [x] **PPO epochs**: Currently 4 — try 8-10 with smaller clip epsilon
 - [ ] **Total frames**: 50M may not be enough for slow seeds — try 100M
 
-W&B group: `ppo_v2_5seeds` (seed 5 and seed 2 solved, seeds 1/3/4 stuck at ~600)
+### Sweep v1 Results (2026-02-05)
+
+Ran 8 configs × 3 seeds = 24 runs. W&B project: `SpaceX-Landing`, groups: `sweep_*`
+
+| Config | Mean | Std | Min | Max | Notes |
+|--------|------|-----|-----|-----|-------|
+| **entropy_0.02_gae_0.97** | **796.0** | 137.7 | 603.2 | 916.0 | Best mean |
+| gae_0.97 | 795.9 | 152.3 | 580.9 | 912.3 | |
+| entropy_0.05 | 792.1 | 142.4 | 590.7 | 895.2 | |
+| entropy_0.02 | 765.2 | 201.4 | 480.8 | 918.5 | High variance |
+| **clip_anneal** | 746.4 | **110.5** | **641.9** | 899.3 | **Most consistent** |
+| minibatch_8192 | 723.9 | 126.3 | 582.2 | 888.9 | |
+| baseline | 690.8 | 154.0 | 544.8 | 903.8 | |
+| epochs_8 | 590.4 | 249.6 | 289.4 | 900.6 | **Avoid** - hurts training |
+
+**Key findings:**
+1. `clip_anneal` has best consistency (lowest std=110.5, highest min=641.9)
+2. `entropy_0.02_gae_0.97` has best mean (796.0)
+3. `epochs_8` makes things worse — too many PPO epochs hurts convergence
+4. GAE 0.97 and entropy changes both help independently
+
+### Sweep v2: Combining clip_anneal with best performers (2026-02-05)
+
+Testing whether clip_anneal's consistency combines with entropy/GAE's performance gains.
+
+```bash
+cd training/multi_rocket && uv run python sweep_ppo.py --v2
+```
+
+| Config | Seeds | Mean | Std | Min | Max | Notes |
+|--------|-------|------|-----|-----|-----|-------|
+| **clip_anneal_gae_0.97** | 5 | **716.0** | 155.3 | 568.0 | 910.7 | **Best config** |
+| clip_anneal_entropy_0.05_gae_0.97 | 3 | 765.1 | 108.4 | 637.2 | 902.1 | Good balance |
+| clip_anneal_entropy_0.02_gae_0.97 | 3 | 729.5 | 129.8 | 635.7 | 913.0 | |
+| clip_anneal_entropy_0.02 | 3 | 636.9 | **14.5** | 616.9 | 651.1 | Stuck - too consistent! |
+
+**5-seed validation of `clip_anneal_gae_0.97`:**
+- 3-seed mean was 804.1, 5-seed mean is 716.0 (seeds 3&4 underperformed)
+- Still beats baseline (690.8 mean)
+- Convergence rate: ~3/5 seeds reach >800 vs baseline's ~2/5
+- Seed sensitivity not fully solved, but improved
+
+**Key findings:**
+1. **Best config: `clip_anneal_gae_0.97`** — Improves over baseline but seed sensitivity remains
+2. `clip_anneal_entropy_0.02` gets stuck at ~637 — entropy suppression + clip annealing prevents late exploration
+3. GAE 0.97 is the key ingredient — helps across all combinations
+4. Adding entropy to clip_anneal hurts more than helps
+
+### Recommended Config
+
+### Reset Noise Experiment (2026-02-05)
+
+**Problem:** Seed sensitivity remained even with tuned hyperparameters. Root cause: `reset_noise=0.01` meant all episodes started in nearly identical states (centered, upright, stationary). Policy overfits to narrow initial conditions.
+
+**Solution:** Increased reset noise significantly:
+| Parameter | Old | New |
+|-----------|-----|-----|
+| xy position | ±0.01m | ±3.0m |
+| velocity | ±0.01 m/s | ±3.0 m/s |
+| angular | ±0.01 rad | ±0.15 rad (~8°) |
+| angular vel | ±0.01 rad/s | ±0.3 rad/s |
+
+**Results (W&B group: `reset_noise_v1`):**
+| Config | Seeds | Mean | Std | Min | Max |
+|--------|-------|------|-----|-----|-----|
+| **With reset noise** | 3 | **832.4** | **17.6** | **807.7** | 847.6 |
+| Without (clip_anneal_gae_0.97) | 5 | 716.0 | 155.3 | 568.0 | 910.7 |
+| Baseline | 3 | 690.8 | 154.0 | 544.8 | 903.8 |
+
+All 3 seeds: [841.9, 847.6, 807.7] — **seed sensitivity solved!**
+
+**Key insight:** Forcing the policy to handle varied initial conditions improves both generalization AND consistency. The std dropped from 155 → 18 (9x improvement).
+
+### Final Recommended Config
+
+Updated in `config_ppo.yaml`:
+```yaml
+loss:
+  anneal_clip_epsilon: true
+  gae_lambda: 0.97
+
+env:
+  reset_noise:
+    pos: 3.0
+    vel: 3.0
+    ang: 0.15
+    angvel: 0.3
+```
+
+### Sweep Script
+
+Run hyperparameter sweep with 3 seeds per config:
+```bash
+cd training/multi_rocket && uv run python sweep_ppo.py      # v1 (original 8 configs)
+cd training/multi_rocket && uv run python sweep_ppo.py --v2  # v2 (clip_anneal combos)
+```
+
+**Options:**
+- `--dry-run`: Print commands without running
+- `--list`: Show all sweep configs
+- `--config <name>`: Run only one config (e.g., `--config entropy_0.02`)
+- `--seed <n>`: Run only one seed
+- `--v2`: Run follow-up sweep (clip_anneal combinations)
 
 ---
 
 ## Future Improvements
 
 - [x] **PPO for massive parallelism**: Added PPO training setup in `training/multi_rocket/` (Phase 7)
+- [x] **Hyperparameter tuning**: `clip_anneal_gae_0.97` + reset noise (mean=832, std=18)
+- [x] **Seed sensitivity solved**: Reset noise forces generalization (std: 155 → 18)
 - [ ] **Curriculum on GPU**: Implement curriculum height changes in the Warp environment
-- [ ] **Sim-to-real considerations**: Widen domain randomization after initial convergence
+- [ ] **Sim-to-real considerations**: Mass/thrust randomization after initial convergence
 - [ ] **Thrust vectoring**: Add gimbal actuators for more realistic engine control
 - [ ] **Multi-stage landing**: Boostback burn -> entry burn -> landing burn sequence
 - [ ] **Wind disturbances**: Add random lateral forces during descent

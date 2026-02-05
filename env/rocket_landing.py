@@ -400,7 +400,7 @@ class RocketLander(MujocoEnv):
 
         # Also check success near ground (above crash threshold)
         target_height = design_config.target_height
-        if (pos_z < target_height + 0.5
+        if (pos_z < target_height + 0.15
                 and pos_z >= 0.5
                 and horizontal_distance < 2.0
                 and vel_mag < 2.0
