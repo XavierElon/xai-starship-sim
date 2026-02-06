@@ -139,6 +139,11 @@ class RocketLanderWarp(EnvBase):
         # Step counter per environment
         self._step_count = torch.zeros(num_envs, dtype=torch.int32, device=self._device)
 
+        # Velocity history for approach speed tracking (max over last N steps)
+        self._vel_history_len = 10
+        self._vel_history = torch.zeros(num_envs, self._vel_history_len, device=self._device)
+        self._vel_history_idx = 0
+
         # Capture CUDA graph for fast stepping
         self._graph = None
         self._capture_cuda_graph()
@@ -218,7 +223,7 @@ class RocketLanderWarp(EnvBase):
 
         return torch.cat([pos, euler, vel, angular_vel], dim=-1)  # [N, 12]
 
-    def _compute_reward(self, obs, done_mask, crash_type, pre_step_vel=None):
+    def _compute_reward(self, obs, done_mask, crash_type, pre_step_vel=None, max_recent_vel=None):
         """Compute batched rewards using exponential shaping.
 
         All per-step components are in [0, 1] via exp(-k * x), so longer
@@ -245,7 +250,7 @@ class RocketLanderWarp(EnvBase):
         # Velocity penalty: safe speed depends on altitude
         # At high altitude: allow fast descent. Near ground: must be slow.
         vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
-        safe_vel = 1.0 + pos_z * 0.4  # At z=50m: 21 m/s ok. At z=5m: 3 m/s ok. At z=0: 1 m/s
+        safe_vel = 1.0 + pos_z * 0.4  # At z=50m: 21 m/s ok. At z=2m: 1.8 m/s. At z=0: 1 m/s
         excess_vel = torch.clamp(vel_mag - safe_vel, min=0.0)
         r_velocity = torch.exp(-self._vel_penalty_coeff * excess_vel)
 
@@ -267,15 +272,18 @@ class RocketLanderWarp(EnvBase):
         )
 
         # Terminal bonuses / penalties
-        # Success: bonus scaled by landing quality using PRE-STEP velocity
-        # (post-step velocity is unreliable because MuJoCo contact absorbs impact)
+        # Success: bonus scaled by max velocity over last N steps (approach speed)
+        # This prevents exploiting MuJoCo contact absorption — the policy must
+        # genuinely approach slowly, not just slam and let the legs absorb impact.
         success_mask = (crash_type == 1).float()
-        if pre_step_vel is not None:
-            pre_vel_mag = torch.sqrt((pre_step_vel**2).sum(dim=-1))
+        if max_recent_vel is not None:
+            approach_vel = max_recent_vel
+        elif pre_step_vel is not None:
+            approach_vel = torch.sqrt((pre_step_vel**2).sum(dim=-1))
         else:
-            pre_vel_mag = vel_mag
-        # Flat success bonus — success condition (vel < 1.0) enforces quality
-        reward = reward + success_mask * self._w["success"]
+            approach_vel = vel_mag
+        r_soft = torch.exp(-2.0 * approach_vel)  # 0.5 m/s → 0.37, 1.5 m/s → 0.05
+        reward = reward + success_mask * self._w["success"] * r_soft
 
         reward = reward + (crash_type == 2).float() * self._w["crash"]
         reward = reward + ((crash_type == 3) | (crash_type == 4)).float() * self._w["tipover"]
@@ -388,14 +396,22 @@ class RocketLanderWarp(EnvBase):
         qpos[env_mask] = new_qpos[env_mask]
         qvel[env_mask] = new_qvel[env_mask]
 
-        # Reset step counter
+        # Reset step counter and velocity history
         self._step_count[env_mask] = 0
+        self._vel_history[env_mask] = 0.0
 
     def _step(self, td: TensorDictBase) -> TensorDictBase:
         """Step all environments with given actions."""
         # Store pre-step velocity for impact force penalty
         _, qvel_pre = self._get_state_tensors()
         pre_step_vel = qvel_pre[:, :3].clone()  # [N, 3] linear velocity before physics
+
+        # Record velocity magnitude in rolling history buffer
+        pre_vel_mag = torch.sqrt((pre_step_vel**2).sum(dim=-1))
+        self._vel_history[:, self._vel_history_idx] = pre_vel_mag
+        self._vel_history_idx = (self._vel_history_idx + 1) % self._vel_history_len
+        # Max velocity over recent steps — captures true approach speed before contact absorption
+        max_recent_vel = self._vel_history.max(dim=-1).values
 
         # Write actions to Warp ctrl
         actions = td["action"]  # [N, 3]
@@ -416,8 +432,8 @@ class RocketLanderWarp(EnvBase):
         terminated, truncated, crash_type = self._compute_done(obs, pre_step_vel=pre_step_vel)
         done = terminated | truncated
 
-        # Compute reward (pass pre-step velocity for impact penalty)
-        reward = self._compute_reward(obs, done, crash_type, pre_step_vel=pre_step_vel)
+        # Compute reward (pass max recent velocity for landing quality bonus)
+        reward = self._compute_reward(obs, done, crash_type, pre_step_vel=pre_step_vel, max_recent_vel=max_recent_vel)
 
         # Auto-reset done environments
         self._reset_envs(done)
