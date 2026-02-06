@@ -352,10 +352,7 @@ cd training/multi_rocket && uv run python sweep_ppo.py --v2  # v2 (clip_anneal c
 
 ---
 
-## TODO (2026-02-06)
+## TODO (2026-02-07)
 
-- [ ] **Run training with tightened success condition**: Success zone changed from `target_height + 0.5` to `target_height + 0.15`. This should make the rocket actually land instead of hovering 0.5m above ground.
-  ```bash
-  cd training/multi_rocket && uv run python train_ppo.py env.seed=0 logger.group_name=demo_model_tight logger.exp_name=demo_tight_seed0
-  ```
+- [ ] **Try time penalty -0.3 (currently -0.5)**: Training reward peaks at ~360 around 30M frames then drops to ~240 at 60M. The policy is getting *better* (softer landing, 0.35 m/s) but taking more steps (~400 vs ~200), so the cumulative time penalty eats into total reward. Reducing from -0.5 to -0.3 should let soft landings consistently outscore fast landings and stabilize the learning curve.
 - [ ] **Update LOGBOOK with training speed comparison**: Document PPO multi-env training speed (~75k it/s, 11 min for 50M frames)
