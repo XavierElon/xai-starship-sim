@@ -315,7 +315,7 @@ class RocketLanderWarp(EnvBase):
         near_ground = pos_z < (self._target_height + 0.05)
         above_crash = pos_z >= 0.5
         near_pad = h_dist < 2.0
-        slow = vel_mag < 1.5
+        slow = vel_mag < 1.0
         upright = (roll.abs() < 15.0) & (pitch.abs() < 15.0)
         success = near_ground & above_crash & near_pad & slow & upright
         crash_type = torch.where(success, torch.tensor(1, device=self._device), crash_type)
