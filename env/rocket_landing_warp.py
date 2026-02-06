@@ -274,9 +274,8 @@ class RocketLanderWarp(EnvBase):
             pre_vel_mag = torch.sqrt((pre_step_vel**2).sum(dim=-1))
         else:
             pre_vel_mag = vel_mag
-        r_impact = torch.exp(-1.0 * pre_vel_mag)  # 1 m/s → 0.37, 3 m/s → 0.05, 10 m/s → 0.00005
-        landing_quality = r_distance * r_impact * r_upright
-        reward = reward + success_mask * self._w["success"] * landing_quality
+        # Flat success bonus — success condition (vel < 1.0) enforces quality
+        reward = reward + success_mask * self._w["success"]
 
         reward = reward + (crash_type == 2).float() * self._w["crash"]
         reward = reward + ((crash_type == 3) | (crash_type == 4)).float() * self._w["tipover"]

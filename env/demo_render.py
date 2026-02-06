@@ -105,8 +105,12 @@ def build_ppo_actor(env, hidden_sizes, activation, device):
     return actor
 
 
-def collect_trajectory(env, rocket_env, actor, max_steps):
-    """Step the policy and record qpos/qvel at each timestep."""
+def collect_trajectory(env, rocket_env, actor, max_steps, linger_steps=60):
+    """Step the policy and record qpos/qvel at each timestep.
+
+    After episode ends, continues recording for linger_steps frames
+    so the video doesn't cut off abruptly on landing.
+    """
     trajectory = []
     with set_exploration_type(ExplorationType.DETERMINISTIC), torch.no_grad():
         td = env.reset()
@@ -120,6 +124,10 @@ def collect_trajectory(env, rocket_env, actor, max_steps):
 
             done = td["next", "done"].item()
             if done:
+                # Keep recording physics for a bit after landing
+                for _ in range(linger_steps):
+                    mujoco.mj_step(rocket_env.model, rocket_env.data)
+                    trajectory.append((rocket_env.data.qpos.copy(), rocket_env.data.qvel.copy()))
                 break
             td = td["next"]
 
