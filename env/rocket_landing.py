@@ -293,6 +293,10 @@ class RocketLander(MujocoEnv):
         # Track thrust usage
         self._episode_total_thrust += np.sum(np.abs(action))
 
+        # Store pre-step velocity for success condition check
+        pre_obs = self._get_obs()
+        pre_step_vel_mag = np.linalg.norm(pre_obs[6:9])
+
         self.do_simulation(action, self.frame_skip)
         next_observation = self._get_obs()
 
@@ -301,8 +305,8 @@ class RocketLander(MujocoEnv):
         vel_magnitude = np.linalg.norm(vel)
         self._episode_max_velocity = max(self._episode_max_velocity, vel_magnitude)
 
-        # Compute done and crash report
-        done, crash_report = self._compute_done(next_observation)
+        # Compute done and crash report (use pre-step velocity)
+        done, crash_report = self._compute_done(next_observation, pre_step_vel_mag)
 
         # Calculate reward with components
         reward, reward_components = self.reward_calculator.calculate(
@@ -365,7 +369,7 @@ class RocketLander(MujocoEnv):
 
         return np.concatenate([pos, roll, pitch, yaw, vel, angular_vel])
 
-    def _compute_done(self, state):
+    def _compute_done(self, state, pre_step_vel_mag=None):
         design_config = self.config.get_design_config()
         (
             pos_x, pos_y, pos_z,
@@ -377,13 +381,14 @@ class RocketLander(MujocoEnv):
         max_angle = self.config.max_angle
         max_distance = self.config.max_distance
         horizontal_distance = np.sqrt(pos_x**2 + pos_y**2)
-        vel_mag = np.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
+        # Use pre-step velocity to prevent exploiting MuJoCo contact absorption
+        vel_mag = pre_step_vel_mag if pre_step_vel_mag is not None else np.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
 
         # Failure conditions
         if pos_z < 0.5:
             # Check for success first (soft touchdown overrides crash)
             if (horizontal_distance < 2.0
-                    and vel_mag < 1.5
+                    and vel_mag < 1.0
                     and abs(roll) < 15.0
                     and abs(pitch) < 15.0):
                 return True, 1  # Success
@@ -403,7 +408,7 @@ class RocketLander(MujocoEnv):
         if (pos_z < target_height + 0.05
                 and pos_z >= 0.5
                 and horizontal_distance < 2.0
-                and vel_mag < 2.0
+                and vel_mag < 1.0
                 and abs(roll) < 15.0
                 and abs(pitch) < 15.0):
             return True, 1  # Success

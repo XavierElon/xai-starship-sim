@@ -282,7 +282,7 @@ class RocketLanderWarp(EnvBase):
 
         return reward.unsqueeze(-1)
 
-    def _compute_done(self, obs):
+    def _compute_done(self, obs, pre_step_vel=None):
         """Compute termination conditions.
 
         Returns:
@@ -310,11 +310,15 @@ class RocketLanderWarp(EnvBase):
         crash_type = torch.where(crashed, torch.tensor(2, device=self._device), crash_type)
 
         # Success condition (highest priority — overrides crash when rocket touches down softly)
-        vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
+        # Use PRE-STEP velocity to prevent exploiting MuJoCo contact absorption
+        if pre_step_vel is not None:
+            pre_vel_mag = torch.sqrt((pre_step_vel**2).sum(dim=-1))
+        else:
+            pre_vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
         near_ground = pos_z < (self._target_height + 0.05)
         above_crash = pos_z >= 0.5
         near_pad = h_dist < 2.0
-        slow = vel_mag < 1.0
+        slow = pre_vel_mag < 1.0
         upright = (roll.abs() < 15.0) & (pitch.abs() < 15.0)
         success = near_ground & above_crash & near_pad & slow & upright
         crash_type = torch.where(success, torch.tensor(1, device=self._device), crash_type)
@@ -409,7 +413,7 @@ class RocketLanderWarp(EnvBase):
         obs = self._build_obs(qpos, qvel)
 
         # Compute termination
-        terminated, truncated, crash_type = self._compute_done(obs)
+        terminated, truncated, crash_type = self._compute_done(obs, pre_step_vel=pre_step_vel)
         done = terminated | truncated
 
         # Compute reward (pass pre-step velocity for impact penalty)
