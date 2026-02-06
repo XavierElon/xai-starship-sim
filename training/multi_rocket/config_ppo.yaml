@@ -16,14 +16,14 @@ env:
     velocity: 0.25
     upright: 0.1
     angular: 0.05
-    success: 100.0
+    success: 500.0
     crash: -10.0
     tipover: -10.0
 
   # Velocity penalty shaping (exponential gate near ground)
   velocity_penalty:
     gate_scale: 15.0    # height scale for danger zone (meters)
-    coeff: 2.0          # steepness of velocity penalty - strong near ground
+    coeff: 5.0          # steepness of velocity penalty - strong near ground
 
   # Termination conditions
   termination:

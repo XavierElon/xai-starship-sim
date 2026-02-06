@@ -218,7 +218,7 @@ class RocketLanderWarp(EnvBase):
 
         return torch.cat([pos, euler, vel, angular_vel], dim=-1)  # [N, 12]
 
-    def _compute_reward(self, obs, done_mask, crash_type):
+    def _compute_reward(self, obs, done_mask, crash_type, pre_step_vel=None):
         """Compute batched rewards using exponential shaping.
 
         All per-step components are in [0, 1] via exp(-k * x), so longer
@@ -228,6 +228,7 @@ class RocketLanderWarp(EnvBase):
             obs: [N, 12] observations
             done_mask: [N] bool tensor
             crash_type: [N] int tensor (0=ongoing, 1=success, 2=crash, 3=roll, 4=pitch, 5=oob)
+            pre_step_vel: [N, 3] velocity before physics step (for impact penalty)
 
         Returns:
             [N, 1] reward tensor
@@ -244,7 +245,7 @@ class RocketLanderWarp(EnvBase):
         # Velocity penalty: safe speed depends on altitude
         # At high altitude: allow fast descent. Near ground: must be slow.
         vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
-        safe_vel = 2.0 + pos_z * 0.4  # At z=50m: 22 m/s ok. At z=5m: 4 m/s ok. At z=0: 2 m/s
+        safe_vel = 1.0 + pos_z * 0.4  # At z=50m: 21 m/s ok. At z=5m: 3 m/s ok. At z=0: 1 m/s
         excess_vel = torch.clamp(vel_mag - safe_vel, min=0.0)
         r_velocity = torch.exp(-self._vel_penalty_coeff * excess_vel)
 
@@ -262,12 +263,19 @@ class RocketLanderWarp(EnvBase):
             + self._w["velocity"] * r_velocity
             + self._w["upright"] * r_upright
             + self._w["angular"] * r_angular
+            - 0.5  # time penalty: incentivize landing quickly
         )
 
         # Terminal bonuses / penalties
-        # Success: bonus scaled by landing quality
+        # Success: bonus scaled by landing quality using PRE-STEP velocity
+        # (post-step velocity is unreliable because MuJoCo contact absorbs impact)
         success_mask = (crash_type == 1).float()
-        landing_quality = r_distance * r_velocity * r_upright
+        if pre_step_vel is not None:
+            pre_vel_mag = torch.sqrt((pre_step_vel**2).sum(dim=-1))
+        else:
+            pre_vel_mag = vel_mag
+        r_impact = torch.exp(-1.0 * pre_vel_mag)  # 1 m/s → 0.37, 3 m/s → 0.05, 10 m/s → 0.00005
+        landing_quality = r_distance * r_impact * r_upright
         reward = reward + success_mask * self._w["success"] * landing_quality
 
         reward = reward + (crash_type == 2).float() * self._w["crash"]
@@ -304,10 +312,10 @@ class RocketLanderWarp(EnvBase):
 
         # Success condition (highest priority — overrides crash when rocket touches down softly)
         vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
-        near_ground = pos_z < (self._target_height + 0.15)
+        near_ground = pos_z < (self._target_height + 0.05)
         above_crash = pos_z >= 0.5
         near_pad = h_dist < 2.0
-        slow = vel_mag < 2.0
+        slow = vel_mag < 1.5
         upright = (roll.abs() < 15.0) & (pitch.abs() < 15.0)
         success = near_ground & above_crash & near_pad & slow & upright
         crash_type = torch.where(success, torch.tensor(1, device=self._device), crash_type)
@@ -382,6 +390,10 @@ class RocketLanderWarp(EnvBase):
 
     def _step(self, td: TensorDictBase) -> TensorDictBase:
         """Step all environments with given actions."""
+        # Store pre-step velocity for impact force penalty
+        _, qvel_pre = self._get_state_tensors()
+        pre_step_vel = qvel_pre[:, :3].clone()  # [N, 3] linear velocity before physics
+
         # Write actions to Warp ctrl
         actions = td["action"]  # [N, 3]
         ctrl = self._warp_to_torch(self._mjw_data.ctrl)
@@ -401,8 +413,8 @@ class RocketLanderWarp(EnvBase):
         terminated, truncated, crash_type = self._compute_done(obs)
         done = terminated | truncated
 
-        # Compute reward
-        reward = self._compute_reward(obs, done, crash_type)
+        # Compute reward (pass pre-step velocity for impact penalty)
+        reward = self._compute_reward(obs, done, crash_type, pre_step_vel=pre_step_vel)
 
         # Auto-reset done environments
         self._reset_envs(done)

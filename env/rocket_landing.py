@@ -383,7 +383,7 @@ class RocketLander(MujocoEnv):
         if pos_z < 0.5:
             # Check for success first (soft touchdown overrides crash)
             if (horizontal_distance < 2.0
-                    and vel_mag < 2.0
+                    and vel_mag < 1.5
                     and abs(roll) < 15.0
                     and abs(pitch) < 15.0):
                 return True, 1  # Success
@@ -400,7 +400,7 @@ class RocketLander(MujocoEnv):
 
         # Also check success near ground (above crash threshold)
         target_height = design_config.target_height
-        if (pos_z < target_height + 0.15
+        if (pos_z < target_height + 0.05
                 and pos_z >= 0.5
                 and horizontal_distance < 2.0
                 and vel_mag < 2.0
