@@ -268,7 +268,7 @@ class RocketLanderWarp(EnvBase):
             + self._w["velocity"] * r_velocity
             + self._w["upright"] * r_upright
             + self._w["angular"] * r_angular
-            - 0.5  # time penalty: incentivize landing quickly
+            - 0.3  # time penalty: incentivize landing quickly
         )
 
         # Terminal bonuses / penalties
