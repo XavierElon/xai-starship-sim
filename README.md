@@ -91,6 +91,53 @@ python env/demo_render.py --checkpoint <path> --height 30
 python env/demo_render.py --checkpoint <path> --output-dir my_videos/
 ```
 
+## Environment
+
+### Observation Space (12-dim continuous)
+
+| Index | Component | Description |
+|-------|-----------|-------------|
+| 0-2 | `pos_x, pos_y, pos_z` | Position in meters (target pad at origin) |
+| 3-5 | `roll, pitch, yaw` | Orientation in degrees |
+| 6-8 | `vel_x, vel_y, vel_z` | Linear velocity in m/s |
+| 9-11 | `ang_x, ang_y, ang_z` | Angular velocity in rad/s |
+
+### Action Space (3-dim continuous)
+
+| Index | Component | Range | Description |
+|-------|-----------|-------|-------------|
+| 0 | `thrust_x` | [-1, 1] | Lateral thrust X (25N) |
+| 1 | `thrust_y` | [-1, 1] | Lateral thrust Y (25N) |
+| 2 | `thrust_z` | [0, 1] | Main engine (200N) |
+
+### Reward Function
+
+**Per-step shaping** (weighted sum of exponential components, all in [0, 1]):
+
+| Component | Weight | Formula | Purpose |
+|-----------|--------|---------|---------|
+| Distance | 0.6 | `exp(-0.05 * dist_3d)` | Approach the landing pad |
+| Velocity | 0.25 | `exp(-coeff * excess_vel)` | Slow down near ground (altitude-dependent safe speed) |
+| Upright | 0.1 | `exp(-2.0 * tilt_rad)` | Stay vertical |
+| Angular | 0.05 | `exp(-0.5 * ang_mag)` | Minimize rotation |
+| Time penalty | — | `-0.125` per step | Incentivize landing quickly |
+
+**Terminal rewards:**
+
+| Event | Reward | Condition |
+|-------|--------|-----------|
+| Success | `+2000 * exp(-2 * approach_vel)` | Near pad, slow, upright, at target height |
+| Crash | -10 | Below z=0.5m or hard landing (>5 m/s near surface) |
+| Tipover | -10 | Roll or pitch exceeds 70° |
+
+### Episode Termination
+
+- **Success**: within 2m of pad center, altitude near target height, velocity < 1 m/s, tilt < 15°
+- **Crash**: altitude < 0.5m, or near-surface contact above 5 m/s
+- **Tipover**: roll or pitch > 70°
+- **Out of bounds**: horizontal distance > 20m from pad
+- **Truncation**: 1000 steps (25s at 40Hz control)
+
 ## Project Structure
 
 ```
