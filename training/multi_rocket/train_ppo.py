@@ -221,10 +221,17 @@ def main(cfg: "DictConfig"):  # noqa: F821
             crash_stats = aggregate_crash_stats(batch_crash_reports)
             total_episodes = sum(crash_stats.values())
             for crash_type, count in crash_stats.items():
-                metrics_to_log[f"train/crash_{crash_type}"] = count
-                metrics_to_log[f"train/crash_{crash_type}_rate"] = (
-                    count / total_episodes if total_episodes > 0 else 0
-                )
+                if crash_type == "ongoing":
+                    continue
+                if crash_type == "success":
+                    metrics_to_log["train/landing_success_rate"] = (
+                        count / total_episodes if total_episodes > 0 else 0
+                    )
+                else:
+                    metrics_to_log[f"train/crash_{crash_type}"] = count
+                    metrics_to_log[f"train/crash_{crash_type}_rate"] = (
+                        count / total_episodes if total_episodes > 0 else 0
+                    )
             batch_crash_reports = []
 
         # --- PPO training ---
