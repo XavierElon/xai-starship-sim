@@ -87,6 +87,8 @@ class RocketLanderWarp(EnvBase):
         # Velocity penalty shaping (exponential gate near ground)
         vel_gate_scale: float = 10.0,  # height scale for danger zone (meters)
         vel_penalty_coeff: float = 1.0,  # steepness of velocity penalty
+        # Time penalty
+        w_time_penalty: float = 0.3,  # per-step cost to incentivize landing
         # Termination
         max_angle: float = 70.0,
         max_distance: float = 20.0,
@@ -106,6 +108,7 @@ class RocketLanderWarp(EnvBase):
         self._crash_velocity = crash_velocity
         self._vel_gate_scale = vel_gate_scale
         self._vel_penalty_coeff = vel_penalty_coeff
+        self._time_penalty = w_time_penalty
 
         # Reward weights as tensors on device
         self._w = {
@@ -270,7 +273,7 @@ class RocketLanderWarp(EnvBase):
             + self._w["velocity"] * r_velocity
             + self._w["upright"] * r_upright
             + self._w["angular"] * r_angular
-            - 0.3  # time penalty: incentivize landing quickly
+            - self._time_penalty
         )
 
         # Terminal bonuses / penalties

@@ -58,6 +58,7 @@ def env_maker(cfg, curriculum_height=None, num_envs=None):
             "success": "w_success",
             "crash": "w_crash",
             "tipover": "w_tipover",
+            "time_penalty": "w_time_penalty",
         }
         for cfg_key, env_key in rw_map.items():
             if hasattr(rw_cfg, cfg_key):
