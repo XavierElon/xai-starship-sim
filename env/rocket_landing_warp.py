@@ -247,7 +247,7 @@ class RocketLanderWarp(EnvBase):
 
         # Distance to target (3D)
         dist_3d = torch.sqrt(pos_x**2 + pos_y**2 + (pos_z - self._target_height)**2)
-        r_distance = torch.exp(-0.02 * dist_3d)
+        r_distance = torch.exp(-0.05 * dist_3d)
 
         # Velocity penalty: safe speed depends on altitude
         # At high altitude: allow fast descent. Near ground: must be slow.
