@@ -70,6 +70,8 @@ def env_maker(cfg, curriculum_height=None, num_envs=None):
             term_kwargs["max_distance"] = term_cfg.max_distance
         if hasattr(term_cfg, "max_angle"):
             term_kwargs["max_angle"] = term_cfg.max_angle
+        if hasattr(term_cfg, "crash_velocity"):
+            term_kwargs["crash_velocity"] = term_cfg.crash_velocity
 
     rocket_design = "v0"
     if hasattr(cfg.env, "rocket") and hasattr(cfg.env.rocket, "design"):

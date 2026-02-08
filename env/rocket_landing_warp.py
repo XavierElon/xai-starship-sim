@@ -90,6 +90,7 @@ class RocketLanderWarp(EnvBase):
         # Termination
         max_angle: float = 70.0,
         max_distance: float = 20.0,
+        crash_velocity: float = 5.0,  # m/s — ground contact above this = crash
     ):
         self._num_envs = num_envs
         self._device = torch.device(device)
@@ -102,6 +103,7 @@ class RocketLanderWarp(EnvBase):
         self._reset_angvel_noise = reset_angvel_noise
         self._max_angle = max_angle
         self._max_distance = max_distance
+        self._crash_velocity = crash_velocity
         self._vel_gate_scale = vel_gate_scale
         self._vel_penalty_coeff = vel_penalty_coeff
 
@@ -317,13 +319,17 @@ class RocketLanderWarp(EnvBase):
         crash_type = torch.where(roll_over, torch.tensor(3, device=self._device), crash_type)
         crash_type = torch.where(crashed, torch.tensor(2, device=self._device), crash_type)
 
-        # Success condition (highest priority — overrides crash when rocket touches down softly)
-        # Use PRE-STEP velocity to prevent exploiting MuJoCo contact absorption
+        # Hard-landing crash: near surface + pre-step velocity too high
         if pre_step_vel is not None:
             pre_vel_mag = torch.sqrt((pre_step_vel**2).sum(dim=-1))
         else:
             pre_vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
-        near_ground = pos_z < (self._target_height + 0.05)
+        near_surface = pos_z < (self._target_height + 0.5)
+        hard_landing = near_surface & (pre_vel_mag > self._crash_velocity)
+        crash_type = torch.where(hard_landing, torch.tensor(2, device=self._device), crash_type)
+
+        # Success condition (highest priority — overrides crash when rocket touches down softly)
+        near_ground = pos_z < (self._target_height + 0.1)
         above_crash = pos_z >= 0.5
         near_pad = h_dist < 2.0
         slow = pre_vel_mag < 1.0

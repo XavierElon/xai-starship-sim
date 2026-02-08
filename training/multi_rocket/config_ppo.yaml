@@ -29,6 +29,7 @@ env:
   termination:
     max_distance: 20.0
     max_angle: 70.0
+    crash_velocity: 5.0  # m/s — ground contact above this = crash
 
   # Reset noise (domain randomization for initial conditions)
   reset_noise:
