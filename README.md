@@ -138,6 +138,19 @@ python env/demo_render.py --checkpoint <path> --output-dir my_videos/
 - **Out of bounds**: horizontal distance > 20m from pad
 - **Truncation**: 1000 steps (25s at 40Hz control)
 
+### Domain Randomization
+
+Initial conditions are randomized at each episode reset to produce robust policies:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `reset_pos_noise` | 3.0 m | XY position offset from pad center |
+| `reset_vel_noise` | 3.0 m/s | Linear velocity perturbation |
+| `reset_ang_noise` | 0.15 rad (~8°) | Initial orientation tilt |
+| `reset_angvel_noise` | 0.3 rad/s | Angular velocity perturbation |
+
+The rocket starts at 50m altitude with these perturbations applied, so it must learn to handle off-center starts, initial tilt, and nonzero velocity.
+
 ## Project Structure
 
 ```
