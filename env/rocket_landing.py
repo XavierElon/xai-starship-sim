@@ -63,7 +63,7 @@ class RocketLander(MujocoEnv):
 
         Args:
             config: Full RocketEnvConfig object (takes precedence over other args)
-            rocket_design: Rocket design version ("v0", "v1", "v2")
+            rocket_design: Rocket design version ("v0", "v1")
             domain_randomization: Dict of domain randomization settings
             reward_weights: Dict of reward weight overrides
             frame_skip: Number of simulation steps per action
@@ -503,17 +503,17 @@ if __name__ == "__main__":
             break
     env.close()
 
-    # Test with v2 design
-    print("\nTesting v2 design...")
-    env = RocketLander(rocket_design="v2", render_mode="rgb_array", verbose=0)
+    # Test with v1 design
+    print("\nTesting v1 design...")
+    env = RocketLander(rocket_design="v1", render_mode="rgb_array", verbose=0)
     obs, _ = env.reset()
-    print(f"v2: obs shape {obs.shape}, target_z={env.target_position[2]}")
+    print(f"v1: obs shape {obs.shape}, target_z={env.target_position[2]}")
     env.close()
 
     # Test with domain randomization
     print("\nTesting domain randomization...")
     env = RocketLander(
-        rocket_design="v2",
+        rocket_design="v1",
         domain_randomization={"enabled": True},
         render_mode="rgb_array",
     )

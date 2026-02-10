@@ -1,4 +1,4 @@
-<mujoco model="rocket_v2_three_legs">
+<mujoco model="rocket_v1_three_legs">
     <option timestep="0.005"/>
 
     <asset>

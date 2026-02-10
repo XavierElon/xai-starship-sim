@@ -208,7 +208,7 @@ def main():
     parser.add_argument("--fps", type=int, default=40, help="Video FPS (default: 40)")
     parser.add_argument("--max-steps", type=int, default=1000, help="Max steps per episode")
     parser.add_argument("--output-dir", type=str, default=None, help="Output directory (default: videos/)")
-    parser.add_argument("--rocket-design", type=str, default=None, help="Override rocket design (v0/v1/v2)")
+    parser.add_argument("--rocket-design", type=str, default=None, help="Override rocket design (v0/v1)")
     parser.add_argument("--height", type=float, default=None, help="Override starting height")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for initial conditions")
     args = parser.parse_args()

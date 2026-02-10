@@ -7,8 +7,7 @@ This directory tracks iterations of the rocket model design for the SpaceX landi
 | Version | Screenshot | Description | Status | Height | Mass | Landed Z |
 |---------|-----------|-------------|--------|--------|------|----------|
 | [v0](design_v0.md) | <img src="screenshots/design_v0.png" width="120"> | Simple cylinder (baseline) | Deprecated | 2.0 m | 10.0 kg | 1.00 m |
-| [v1](design_v1.md) | <img src="screenshots/design_v1.png" width="120"> | Two landing legs | Deprecated | ~4.1 m | 10.0 kg | 1.85 m |
-| [v2](design_v2.md) | <img src="screenshots/design_v2.png" width="120"> | Three legs (tripod) | **Current** | ~4.1 m | 9.71 kg | 1.93 m |
+| [v1](design_v1.md) | <img src="screenshots/design_v1.png" width="120"> | Three legs (tripod) | **Current** | ~4.1 m | 9.71 kg | 1.93 m |
 
 ## Physics Summary (All Designs)
 
@@ -29,14 +28,11 @@ rocket_designs/
 ├── README.md           # This file
 ├── design_v0.md        # Version 0 documentation
 ├── design_v1.md        # Version 1 documentation
-├── design_v2.md        # Version 2 documentation
 └── screenshots/        # Visual references
     ├── design_v0.png
     ├── design_v1.png
     ├── design_v1_side.png
-    ├── design_v2.png
-    ├── design_v2_side.png
-    └── design_v2_top.png
+    └── design_v1_top.png
 ```
 
 ## Creating a New Design

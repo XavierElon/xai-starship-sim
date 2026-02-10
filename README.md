@@ -1,6 +1,6 @@
 # SpaceX Falcon 9 Landing Simulator
 
-Train a reinforcement learning agent to land a rocket on a drone ship, SpaceX Falcon 9 style.
+Train a reinforcement learning agent to land a rocket on a drone ship, SpaceX Falcon 9 style. Built with [TorchRL](https://github.com/pytorch/rl) for training.
 
 <p align="center">
   <img src="docs/demo_aerial.png" width="600" alt="Rocket landing aerial view">
@@ -175,7 +175,7 @@ env/                            Shared environment code
   rewards.py                    Reward calculator
   xml_files/                    MuJoCo XML model files
     single_rocket_test.xml      Training model (v0 cylinder, fast)
-    rocket_v2_three_legs.xml    Full rocket model (v2 tripod with legs)
+    rocket_v1_three_legs.xml    Full rocket model (v1 tripod with legs)
     demo_v0.xml                 Demo scene (ocean, drone ship, sky)
 
 rocket_designs/                 Design docs and screenshots
@@ -185,12 +185,12 @@ rocket_designs/                 Design docs and screenshots
 
 Two models share the same physics (mass, actuators, joint):
 
-| v0 — Training (fast) | v2 — Demo (full detail) |
+| v0 — Training (fast) | v1 — Demo (full detail) |
 |:---------------------:|:-----------------------:|
-| <img src="rocket_designs/screenshots/design_v0.png" width="300"> | <img src="rocket_designs/screenshots/design_v2.png" width="300"> |
+| <img src="rocket_designs/screenshots/design_v0.png" width="300"> | <img src="rocket_designs/screenshots/design_v1.png" width="300"> |
 | Simple cylinder | Tripod with landing legs |
 
-Both have: 10 kg body, free joint (6 DOF), lateral thrust (x/y, 25N), main engine (z, 200N). The policy trained on v0 transfers to v2 since the legs are passive geometry that don't affect the control problem.
+Both have: 10 kg body, free joint (6 DOF), lateral thrust (x/y, 25N), main engine (z, 200N). The policy trained on v0 transfers to v1 since the legs are passive geometry that don't affect the control problem.
 
 ## License
 
