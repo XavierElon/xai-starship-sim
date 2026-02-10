@@ -158,29 +158,6 @@ Initial conditions are randomized at each episode reset to produce robust polici
 
 The rocket starts at 50m altitude with these perturbations applied, so it must learn to handle off-center starts, initial tilt, and nonzero velocity.
 
-## Project Structure
-
-```
-training/          PPO training (GPU, MuJoCo Warp)
-  train_ppo.py                  Training script (Hydra + TorchRL)
-  utils_ppo.py                  Environment and model creation
-  config_ppo.yaml               Training configuration
-  checkpoints/                  Saved model checkpoints
-
-env/                            Shared environment code
-  rocket_landing.py             Gymnasium MuJoCo env (CPU, single)
-  rocket_landing_warp.py        MuJoCo Warp env (GPU, batched)
-  demo_render.py                Demo video renderer
-  config.py                     Configuration dataclasses
-  rewards.py                    Reward calculator
-  xml_files/                    MuJoCo XML model files
-    single_rocket_test.xml      Training model (v0 cylinder, fast)
-    rocket_v1_three_legs.xml    Full rocket model (v1 tripod with legs)
-    demo_v0.xml                 Demo scene (ocean, drone ship, sky)
-
-rocket_designs/                 Design docs and screenshots
-```
-
 ## Rocket Design
 
 Two models share the same physics (mass, actuators, joint):
@@ -191,7 +168,3 @@ Two models share the same physics (mass, actuators, joint):
 | Simple cylinder | Tripod with landing legs |
 
 Both have: 10 kg body, free joint (6 DOF), lateral thrust (x/y, 25N), main engine (z, 200N). The policy trained on v0 transfers to v1 since the legs are passive geometry that don't affect the control problem.
-
-## License
-
-MIT
