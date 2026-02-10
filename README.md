@@ -40,7 +40,7 @@ export MUJOCO_GL=egl
 PPO training with 4096 parallel GPU environments:
 
 ```bash
-cd training/multi_rocket && python train_ppo.py
+cd training && python train_ppo.py
 ```
 
 Switch between rocket designs via config:
@@ -69,14 +69,14 @@ python train_ppo.py collector.total_frames=100_000_000
 python train_ppo.py logger.mode=offline
 ```
 
-Checkpoints are saved to `training/multi_rocket/checkpoints/`.
+Checkpoints are saved to `training/checkpoints/`.
 
 ## Demo Videos
 
 Generate high-quality demo videos from a trained checkpoint:
 
 ```bash
-python env/demo_render.py --checkpoint training/multi_rocket/checkpoints/ppo_final.pt
+python env/demo_render.py --checkpoint training/checkpoints/ppo_final.pt
 ```
 
 This produces two videos in `videos/`:
@@ -161,7 +161,7 @@ The rocket starts at 50m altitude with these perturbations applied, so it must l
 ## Project Structure
 
 ```
-training/multi_rocket/          PPO training (GPU, MuJoCo Warp)
+training/          PPO training (GPU, MuJoCo Warp)
   train_ppo.py                  Training script (Hydra + TorchRL)
   utils_ppo.py                  Environment and model creation
   config_ppo.yaml               Training configuration

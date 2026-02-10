@@ -6,8 +6,8 @@ then replays it in a demo MuJoCo XML with two camera angles:
   - Tracking: closer camera that follows the rocket
 
 Usage:
-    python env/demo_render.py --checkpoint training/multi_rocket/checkpoints/ppo_final.pt
-    python env/demo_render.py --checkpoint training/multi_rocket/checkpoints/ppo_final.pt --resolution 1080
+    python env/demo_render.py --checkpoint training/checkpoints/ppo_final.pt
+    python env/demo_render.py --checkpoint training/checkpoints/ppo_final.pt --resolution 1080
 """
 
 import argparse

@@ -10,7 +10,7 @@ from torchrl.envs.transforms import StepCounter, InitTracker, RewardSum, DoubleT
 from torchrl.modules import MLP, ProbabilisticActor, TanhNormal, ValueOperator
 
 # Add project root to path
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 

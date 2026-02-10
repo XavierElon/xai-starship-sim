@@ -58,7 +58,7 @@ def aggregate_crash_stats(crash_reports):
 def main(cfg: "DictConfig"):  # noqa: F821
     # Reset working directory to project root
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.abspath(os.path.join(script_dir, "../.."))
+    project_root = os.path.abspath(os.path.join(script_dir, ".."))
     os.chdir(project_root)
 
     device = cfg.network.device
