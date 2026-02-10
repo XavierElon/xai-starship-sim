@@ -210,6 +210,7 @@ def main():
     parser.add_argument("--output-dir", type=str, default=None, help="Output directory (default: videos/)")
     parser.add_argument("--rocket-design", type=str, default=None, help="Override rocket design (v0/v1/v2)")
     parser.add_argument("--height", type=float, default=None, help="Override starting height")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed for initial conditions")
     args = parser.parse_args()
 
     device = torch.device("cpu")
@@ -249,6 +250,11 @@ def main():
 
     frames_trained = checkpoint.get("collected_frames", "unknown")
     print(f"  Trained for {frames_trained} frames")
+
+    # Set seed for reproducible initial conditions
+    if args.seed is not None:
+        torch.manual_seed(args.seed)
+        np.random.seed(args.seed)
 
     # Collect trajectory
     print("\nCollecting trajectory...")

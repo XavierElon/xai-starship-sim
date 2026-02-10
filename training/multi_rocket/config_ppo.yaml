@@ -24,7 +24,7 @@ env:
   # Velocity penalty shaping (exponential gate near ground)
   velocity_penalty:
     gate_scale: 15.0    # height scale for danger zone (meters)
-    coeff: 5.0          # steepness of velocity penalty - strong near ground
+    coeff: 3.0          # steepness of velocity penalty - strong near ground
 
   # Termination conditions
   termination:
