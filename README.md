@@ -1,4 +1,4 @@
-# SpaceX Rocket Landing Simulator
+# SpaceX Falcon 9 Landing Simulator
 
 Train a reinforcement learning agent to land a rocket on a drone ship, SpaceX Falcon 9 style.
 
@@ -21,8 +21,8 @@ Requires Python 3.10+ and an NVIDIA GPU for training.
 
 ```bash
 # Clone and install dependencies
-git clone <this-repo>
-cd spaceX
+git clone https://github.com/BY571/SpaceX-Falcon9.git
+cd SpaceX-Falcon9
 uv sync
 
 # For GPU training (MuJoCo Warp)
@@ -126,7 +126,7 @@ python env/demo_render.py --checkpoint <path> --output-dir my_videos/
 
 | Event | Reward | Condition |
 |-------|--------|-----------|
-| Success | `+2000 * exp(-2 * approach_vel)` | Near pad, slow, upright, at target height |
+| Success | `+2000 * exp(-1 * approach_vel)` | Near pad, slow, upright, at target height |
 | Crash | -10 | Below z=0.5m or hard landing (>5 m/s near surface) |
 | Tipover | -10 | Roll or pitch exceeds 70° |
 
