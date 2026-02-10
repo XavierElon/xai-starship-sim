@@ -179,7 +179,6 @@ env/                            Shared environment code
     demo_v0.xml                 Demo scene (ocean, drone ship, sky)
 
 rocket_designs/                 Design docs and screenshots
-LOGBOOK.md                      Development log and experiments
 ```
 
 ## Rocket Design
