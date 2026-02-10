@@ -11,7 +11,6 @@ Train a reinforcement learning agent to land a rocket on a drone ship, SpaceX Fa
 - **MuJoCo physics** with 6-DOF free joint rocket dynamics
 - **GPU-accelerated training** via MuJoCo Warp (4096 parallel envs, ~1M+ steps/sec)
 - **PPO** (Proximal Policy Optimization) with GAE advantages
-- **Curriculum learning** with progressive height stages (5m to 50m)
 - **Domain randomization** for robust policies
 - **Demo video renderer** with aerial and tracking camera angles
 
