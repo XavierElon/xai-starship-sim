@@ -43,7 +43,15 @@ PPO training with 4096 parallel GPU environments:
 cd training/multi_rocket && python train_ppo.py
 ```
 
-Training uses the simplified v0 rocket model (cylinder, no legs) for speed — collision detection with the v2 tripod legs is ~3x slower in MuJoCo Warp. The policy transfers directly to the full v2 model since the observation space, action space, and actuators are identical; the legs are passive geometry.
+Switch between rocket designs via config:
+
+```bash
+# Detailed tripod with legs (default)
+python train_ppo.py env.rocket.design=demo
+
+# Simple cylinder (faster physics, no legs)
+python train_ppo.py env.rocket.design=v0
+```
 
 Training logs to [Weights & Biases](https://wandb.ai). Override any config parameter via CLI:
 
