@@ -113,9 +113,9 @@ python env/demo_render.py --checkpoint <path> --output-dir my_videos/
 
 | Index | Component | Range | Description |
 |-------|-----------|-------|-------------|
-| 0 | `thrust_x` | [-1, 1] | Lateral thrust X (25N) |
-| 1 | `thrust_y` | [-1, 1] | Lateral thrust Y (25N) |
-| 2 | `thrust_z` | [0, 1] | Main engine (200N) |
+| 0 | `thrust_x` | [-1, 1] | Lateral thrust X |
+| 1 | `thrust_y` | [-1, 1] | Lateral thrust Y |
+| 2 | `thrust_z` | [0, 1] | Main engine |
 
 ### Reward Function
 
