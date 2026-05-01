@@ -1,0 +1,24 @@
+# CPU / macOS-friendly PPO: Gymnasium MuJoCo (no mujoco_warp).
+# Run from training/:  python train_ppo.py --config-name=config_ppo_cpu ...
+defaults:
+  - config_ppo
+  - _self_
+
+env:
+  backend: gym
+  num_envs: 16
+
+collector:
+  # Parent config_ppo sets 50M frames (GPU); override here or training runs ~tens of hours on CPU.
+  total_frames: 5_000_000
+  frames_per_batch: 256  # num_envs * steps_per_env; must divide evenly by env.num_envs
+  device: cpu
+
+loss:
+  mini_batch_size: 64
+
+optim:
+  device: cpu
+
+network:
+  device: cpu

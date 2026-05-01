@@ -1,7 +1,12 @@
-"""PPO training with GPU-parallel MuJoCo Warp environments.
+"""PPO training with TorchRL.
 
-On-policy training: collect large batches from thousands of parallel envs,
-compute GAE advantages, then do mini-batch PPO updates. Everything stays on GPU.
+Default (`env.backend=warp`): GPU-batched MuJoCo Warp (`mujoco_warp`, CUDA).
+
+CPU / macOS (`env.backend=gym` or `--config-name=config_ppo_cpu`): Gymnasium
+`RocketLander` stacked with `SerialEnv` (no `mujoco_warp`).
+
+On-policy: collect rollouts, GAE advantages, PPO clipped objective. Use
+`collector.frames_per_batch` divisible by `env.num_envs`.
 """
 import os
 import time
@@ -89,6 +94,13 @@ def main(cfg: "DictConfig"):  # noqa: F821
     np.random.seed(cfg.env.seed)
 
     log_crash_breakdown = getattr(cfg.logger, "log_crash_breakdown", True)
+
+    fpb = int(cfg.collector.frames_per_batch)
+    nev = int(cfg.env.num_envs)
+    if fpb % nev != 0:
+        raise ValueError(
+            f"collector.frames_per_batch ({fpb}) must be divisible by env.num_envs ({nev})."
+        )
 
     # Create environments
     train_env, eval_env = make_environment(cfg, logger=logger)
@@ -192,7 +204,10 @@ def main(cfg: "DictConfig"):  # noqa: F821
         data = torch.stack(rollout_tds, dim=1)  # (num_envs, steps_per_env, ...)
         collect_time = time.time() - collect_start
 
-        frames_in_batch = data.numel()
+        # Count actual env transitions, not TensorDict.numel() (which inflates by
+        # every scalar in obs/reward/done/log_prob/etc. and can finish "1M frames"
+        # in a handful of updates with almost no learning).
+        frames_in_batch = int(cfg.env.num_envs) * len(rollout_tds)
         collected_frames += frames_in_batch
         pbar.update(frames_in_batch)
 

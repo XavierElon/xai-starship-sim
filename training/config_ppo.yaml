@@ -2,6 +2,9 @@
 env:
   name: rocket_lander_warp
   library: custom
+  # warp: RocketLanderWarp (needs mujoco_warp + CUDA). gym: Gymnasium RocketLander batched via SerialEnv (CPU).
+  backend: warp
+  max_gym_envs: 128  # safety cap when backend=gym (one MuJoCo instance per worker)
   max_episode_steps: 1000
   seed: 42
   num_envs: 4096

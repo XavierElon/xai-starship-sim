@@ -335,7 +335,8 @@ class RocketLander(MujocoEnv):
     ) -> Dict[str, Any]:
         """Build the info dictionary with all metrics."""
         info = {
-            "crash_report": crash_report,
+            # NumPy scalar so TorchRL info_dict_reader sees a .dtype (plain int breaks readers).
+            "crash_report": np.int64(crash_report),
             "reward_components": reward_components.to_dict(),
         }
 

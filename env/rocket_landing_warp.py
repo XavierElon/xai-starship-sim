@@ -13,7 +13,23 @@ import os
 import sys
 
 import mujoco
-import mujoco_warp as mjw
+
+try:
+    import mujoco_warp as mjw
+except ModuleNotFoundError as e:
+    if getattr(e, "name", None) != "mujoco_warp":
+        raise
+    raise ModuleNotFoundError(
+        "The `mujoco_warp` package is not installed. It is required for RocketLanderWarp "
+        "(GPU batched physics). Install the project GPU extra from the SpaceX-Falcon9 directory:\n\n"
+        '  pip install ".[gpu]"\n\n'
+        "or install the package directly:\n\n"
+        "  pip install mujoco-warp\n\n"
+        "MuJoCo Warp targets NVIDIA CUDA; it is not usable for this training path on "
+        "macOS without suitable GPU support. Use a Linux machine with an NVIDIA GPU, or "
+        "see https://github.com/google-deepmind/mujoco_warp for upstream install notes."
+    ) from e
+
 import numpy as np
 import torch
 import warp as wp
