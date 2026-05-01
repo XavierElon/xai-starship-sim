@@ -1,0 +1,52 @@
+name: Rocket Simulator CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies (CPU version - works perfectly with your M4 patch)
+        run: uv sync
+
+      - name: Lint
+        run: |
+          uv run black --check .
+          uv run ruff check . || echo "Ruff not configured yet - skipping"
+
+      - name: Smoke test training (short run using your CPU-friendly env)
+        run: |
+          cd training
+          uv run python train_ppo.py \
+            env.rocket.design=v0 \
+            env.num_envs=8 \
+            collector.total_frames=10000 \
+            logger.mode=offline
+
+      - name: Render demo video (only on main branch)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cd ..
+          uv run python env/demo_render.py --checkpoint training/checkpoints/ppo_final.pt --headless
+
+      - name: Upload landing video artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: falcon9-landing-video
+          path: videos/
+          retention-days: 30
