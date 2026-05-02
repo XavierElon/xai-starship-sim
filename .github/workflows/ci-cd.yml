@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false # required for auto-commit to work reliably
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -23,27 +25,34 @@ jobs:
       - name: Install dependencies (CPU version)
         run: uv sync
 
-      - name: Lint (black + ruff)
-        run: |
-          uv run --with black black --check .
-          uv run --with ruff ruff check . || echo "Ruff not configured yet - skipping"
+      - name: Auto-format with Black
+        run: uv run --with black black .
 
-      - name: Smoke test training (short run using your CPU-friendly env)
+      - name: Auto-commit formatted files (if any changes)
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'style: auto-format with black'
+          file_pattern: '*.py'
+          commit_user_name: 'github-actions[bot]'
+          commit_user_email: '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Smoke test training (CPU Gym path; no mujoco_warp in CI)
         run: |
           cd training
-          uv run python train_ppo.py \
+          uv run python train_ppo.py --config-name=config_ppo_cpu \
             env.rocket.design=v0 \
             env.num_envs=8 \
             collector.total_frames=10000 \
+            logger.backend= \
+            logger.video=false \
             logger.mode=offline
 
       - name: Render demo video (only on main branch)
         if: github.ref == 'refs/heads/main'
         run: |
           cd ..
-          # Only render if checkpoint exists (prevents failure on first run)
           if [ -f training/checkpoints/ppo_final.pt ]; then
-            uv run python env/demo_render.py --checkpoint training/checkpoints/ppo_final.pt --headless || echo "Render skipped (no checkpoint yet)"
+            uv run python env/demo_render.py --checkpoint training/checkpoints/ppo_final.pt --headless || echo "Render skipped"
           else
             echo "No checkpoint yet - skipping video render"
           fi
