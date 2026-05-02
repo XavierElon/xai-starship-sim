@@ -22,3 +22,7 @@ optim:
 
 network:
   device: cpu
+
+logger:
+  # Parent uses 5M; with small frames_per_batch eval almost never fires — no video/checkpoints.
+  eval_iter: 50_000

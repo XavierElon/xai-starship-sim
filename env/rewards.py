@@ -11,6 +11,7 @@ from env.config import RewardWeights
 @dataclass
 class RewardComponents:
     """Container for individual reward components for logging."""
+
     distance: float = 0.0
     velocity: float = 0.0
     upright: float = 0.0
@@ -62,22 +63,32 @@ class RewardCalculator:
             Tuple of (total_reward, RewardComponents)
         """
         (
-            pos_x, pos_y, pos_z,
-            roll_deg, pitch_deg, yaw_deg,
-            vel_x, vel_y, vel_z,
-            angular_vel_x, angular_vel_y, angular_vel_z,
+            pos_x,
+            pos_y,
+            pos_z,
+            roll_deg,
+            pitch_deg,
+            yaw_deg,
+            vel_x,
+            vel_y,
+            vel_z,
+            angular_vel_x,
+            angular_vel_y,
+            angular_vel_z,
         ) = state
 
         components = RewardComponents()
 
         # Distance to target (3D)
-        dist_3d = np.sqrt(pos_x**2 + pos_y**2 + (pos_z - self.target_height)**2)
+        dist_3d = np.sqrt(pos_x**2 + pos_y**2 + (pos_z - self.target_height) ** 2)
         components.distance = np.exp(-0.02 * dist_3d) * self.weights.distance
 
         # Altitude-gated velocity penalty
         vel_mag = np.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
         alt_ratio = np.clip(pos_z / self.starting_height, 0.0, 1.0)
-        components.velocity = np.exp(-0.5 * vel_mag * (1.0 - alt_ratio)) * self.weights.velocity
+        components.velocity = (
+            np.exp(-0.5 * vel_mag * (1.0 - alt_ratio)) * self.weights.velocity
+        )
 
         # Upright reward (tilt in radians)
         tilt_rad = (abs(roll_deg) + abs(pitch_deg)) * (np.pi / 180.0)

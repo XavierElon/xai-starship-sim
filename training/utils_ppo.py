@@ -1,4 +1,5 @@
 """Utilities for PPO training (MuJoCo Warp GPU or Gymnasium MuJoCo CPU)."""
+
 import os
 import sys
 from functools import partial
@@ -67,7 +68,15 @@ def _rocket_lander_kwargs_from_cfg(cfg):
     rw = {}
     if hasattr(cfg.env, "reward_weights"):
         rw_cfg = cfg.env.reward_weights
-        for key in ("distance", "velocity", "upright", "angular", "success", "crash", "tipover"):
+        for key in (
+            "distance",
+            "velocity",
+            "upright",
+            "angular",
+            "success",
+            "crash",
+            "tipover",
+        ):
             if hasattr(rw_cfg, key):
                 rw[key] = float(getattr(rw_cfg, key))
     if rw:
@@ -128,7 +137,9 @@ def env_maker_gym(cfg, curriculum_height=None, num_envs=None):
 def env_maker(cfg, curriculum_height=None, num_envs=None):
     """Create training env: RocketLanderWarp (GPU) or Serial Gym RocketLander (CPU)."""
     if _env_backend(cfg) == "gym":
-        return env_maker_gym(cfg, curriculum_height=curriculum_height, num_envs=num_envs)
+        return env_maker_gym(
+            cfg, curriculum_height=curriculum_height, num_envs=num_envs
+        )
 
     from env.rocket_landing_warp import RocketLanderWarp
 
@@ -230,36 +241,51 @@ def make_environment(cfg, logger=None, curriculum_height=None):
     return train_env, eval_env
 
 
-def make_render_env(cfg):
-    """Create a CPU Gymnasium env for eval/video rollouts.
+def record_eval_rgb_frames(cfg, actions_np):
+    """Replay eval actions on a fresh rgb_array RocketLander; return uint8 RGB frames.
 
-    Uses vector observations (same 12-dim state as training) so the trained actor
-    can drive the rocket. RGB frames are not exposed here; W&B video logs only
-    when a pixel observation key exists on the rollout.
+    Uses ``reset_noise_scale=0`` and ``reset(seed=cfg.env.seed)`` for a stable clip.
+    The trajectory can differ slightly from the TorchRL eval rollout (different reset),
+    but the action sequence is the one the policy just executed during eval.
     """
+    import numpy as np
+
     from env.rocket_landing import RocketLander
 
+    actions_np = np.asarray(actions_np, dtype=np.float32)
     rocket_design = "v0"
     if hasattr(cfg.env, "rocket") and hasattr(cfg.env.rocket, "design"):
         rocket_design = cfg.env.rocket.design
 
-    rocket_env = RocketLander(
+    env = RocketLander(
         rocket_design=rocket_design,
         render_mode="rgb_array",
         width=256,
         height=256,
+        reset_noise_scale=0.0,
     )
-    env = GymWrapper(rocket_env, device="cpu", from_pixels=False)
-    env = TransformedEnv(
-        env,
-        Compose(
-            StepCounter(max_steps=cfg.env.max_episode_steps),
-            InitTracker(),
-            DoubleToFloat(),
-            RewardSum(),
-        ),
+    env.reset(seed=int(cfg.env.seed))
+    frames = [env.render()]
+    for t in range(len(actions_np)):
+        env.step(actions_np[t])
+        frames.append(env.render())
+    env.close()
+    return frames
+
+
+def save_rgb_mp4(frames, path, fps=20):
+    """Save RGB uint8 frames (H, W, C) to MP4 using imageio + ffmpeg."""
+    import imageio
+
+    if not frames:
+        return
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    writer = imageio.get_writer(
+        path, fps=fps, quality=8, codec="libx264", macro_block_size=1
     )
-    return env
+    for frame in frames:
+        writer.append_data(frame)
+    writer.close()
 
 
 # ====================================================================

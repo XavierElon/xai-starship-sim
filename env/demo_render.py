@@ -127,7 +127,9 @@ def collect_trajectory(env, rocket_env, actor, max_steps, linger_steps=60):
                 # Keep recording physics for a bit after landing
                 for _ in range(linger_steps):
                     mujoco.mj_step(rocket_env.model, rocket_env.data)
-                    trajectory.append((rocket_env.data.qpos.copy(), rocket_env.data.qvel.copy()))
+                    trajectory.append(
+                        (rocket_env.data.qpos.copy(), rocket_env.data.qvel.copy())
+                    )
                 break
             td = td["next"]
 
@@ -193,7 +195,9 @@ def save_video(frames, path, fps):
     if not frames:
         print(f"  No frames to save for {path}")
         return
-    writer = imageio.get_writer(path, fps=fps, quality=8, codec="libx264", macro_block_size=1)
+    writer = imageio.get_writer(
+        path, fps=fps, quality=8, codec="libx264", macro_block_size=1
+    )
     for frame in frames:
         writer.append_data(frame)
     writer.close()
@@ -202,15 +206,37 @@ def save_video(frames, path, fps):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Render demo videos from a trained PPO checkpoint")
-    parser.add_argument("--checkpoint", type=str, required=True, help="Path to PPO checkpoint .pt file")
-    parser.add_argument("--resolution", type=int, default=1080, help="Video height in pixels (default: 1080)")
+    parser = argparse.ArgumentParser(
+        description="Render demo videos from a trained PPO checkpoint"
+    )
+    parser.add_argument(
+        "--checkpoint", type=str, required=True, help="Path to PPO checkpoint .pt file"
+    )
+    parser.add_argument(
+        "--resolution",
+        type=int,
+        default=1080,
+        help="Video height in pixels (default: 1080)",
+    )
     parser.add_argument("--fps", type=int, default=40, help="Video FPS (default: 40)")
-    parser.add_argument("--max-steps", type=int, default=1000, help="Max steps per episode")
-    parser.add_argument("--output-dir", type=str, default=None, help="Output directory (default: videos/)")
-    parser.add_argument("--rocket-design", type=str, default=None, help="Override rocket design (v0/v1)")
-    parser.add_argument("--height", type=float, default=None, help="Override starting height")
-    parser.add_argument("--seed", type=int, default=None, help="Random seed for initial conditions")
+    parser.add_argument(
+        "--max-steps", type=int, default=1000, help="Max steps per episode"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Output directory (default: videos/)",
+    )
+    parser.add_argument(
+        "--rocket-design", type=str, default=None, help="Override rocket design (v0/v1)"
+    )
+    parser.add_argument(
+        "--height", type=float, default=None, help="Override starting height"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=None, help="Random seed for initial conditions"
+    )
     args = parser.parse_args()
 
     device = torch.device("cpu")
@@ -263,7 +289,9 @@ def main():
 
     if trajectory:
         final_pos = trajectory[-1][0][:3]
-        print(f"  Final position: x={final_pos[0]:.2f}, y={final_pos[1]:.2f}, z={final_pos[2]:.2f}")
+        print(
+            f"  Final position: x={final_pos[0]:.2f}, y={final_pos[1]:.2f}, z={final_pos[2]:.2f}"
+        )
 
     # Render from demo XML
     output_dir = args.output_dir or os.path.join(ROOT_DIR, "videos")

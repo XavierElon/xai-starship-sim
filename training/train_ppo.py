@@ -8,6 +8,7 @@ CPU / macOS (`env.backend=gym` or `--config-name=config_ppo_cpu`): Gymnasium
 On-policy: collect rollouts, GAE advantages, PPO clipped objective. Use
 `collector.frames_per_batch` divisible by `env.num_envs`.
 """
+
 import os
 import time
 from collections import defaultdict
@@ -35,9 +36,9 @@ from utils_ppo import (
     log_metrics,
     make_environment,
     make_ppo_models,
-    make_render_env,
+    record_eval_rgb_frames,
+    save_rgb_mp4,
 )
-
 
 # Crash report codes to names
 CRASH_REPORT_NAMES = {
@@ -105,11 +106,6 @@ def main(cfg: "DictConfig"):  # noqa: F821
     # Create environments
     train_env, eval_env = make_environment(cfg, logger=logger)
 
-    # Create CPU render env for video logging
-    render_env = None
-    if cfg.logger.video and cfg.logger.backend:
-        render_env = make_render_env(cfg)
-
     # Create PPO actor and critic
     actor, critic = make_ppo_models(cfg, train_env, device)
 
@@ -134,12 +130,8 @@ def main(cfg: "DictConfig"):  # noqa: F821
     )
 
     # Create optimizers
-    actor_optim = torch.optim.Adam(
-        actor.parameters(), lr=cfg.optim.lr, eps=1e-5
-    )
-    critic_optim = torch.optim.Adam(
-        critic.parameters(), lr=cfg.optim.lr, eps=1e-5
-    )
+    actor_optim = torch.optim.Adam(actor.parameters(), lr=cfg.optim.lr, eps=1e-5)
+    critic_optim = torch.optim.Adam(critic.parameters(), lr=cfg.optim.lr, eps=1e-5)
     optim = group_optimizers(actor_optim, critic_optim)
     del actor_optim, critic_optim
 
@@ -221,8 +213,8 @@ def main(cfg: "DictConfig"):  # noqa: F821
         if len(episode_rewards) > 0:
             episode_length = data["next", "step_count"][episode_end]
             metrics_to_log["train/reward"] = episode_rewards.mean().item()
-            metrics_to_log["train/episode_length"] = (
-                episode_length.sum().item() / len(episode_length)
+            metrics_to_log["train/episode_length"] = episode_length.sum().item() / len(
+                episode_length
             )
 
         # --- Crash statistics ---
@@ -326,34 +318,49 @@ def main(cfg: "DictConfig"):  # noqa: F821
                     actions = eval_rollout["action"].cpu().numpy()
                     metrics_to_log["eval/total_thrust"] = float(np.sum(np.abs(actions)))
 
-            # Record video from CPU render env
-            if render_env is not None:
-                with set_exploration_type(ExplorationType.DETERMINISTIC), torch.no_grad():
-                    actor.eval()
-                    vid_rollout = render_env.rollout(
-                        eval_rollout_steps,
-                        actor,
-                        auto_cast_to_device=True,
-                        break_when_any_done=True,
-                    )
-                    actor.train()
-                    if "pixels" in vid_rollout.keys():
-                        pixels = vid_rollout["pixels"]
-                        if pixels.ndim == 5:
-                            pixels = pixels[0]  # [T, H, W, C]
-                        vid = pixels.cpu().numpy()
-                        vid = np.transpose(vid, (0, 3, 1, 2))  # [T,C,H,W]
-                        vid = vid.astype(np.uint8)
-                        wandb.log({"eval/video": wandb.Video(vid, fps=20, format="mp4")})
+            # RGB video: replay eval actions on a pixel MuJoCo env (eval env has no pixels obs).
+            if (
+                cfg.logger.video
+                and cfg.logger.backend
+                and logger is not None
+                and "action" in eval_rollout.keys()
+            ):
+                actions_np = eval_rollout["action"][0].cpu().numpy()
+                try:
+                    frames = record_eval_rgb_frames(cfg, actions_np)
+                    if frames:
+                        if str(cfg.logger.backend).lower() == "wandb":
+                            rgb = np.stack(frames, axis=0)
+                            vid = np.transpose(rgb, (0, 3, 1, 2))
+                            wandb.log(
+                                {
+                                    "eval/video": wandb.Video(
+                                        vid.astype(np.uint8), fps=20, format="mp4"
+                                    )
+                                },
+                                step=collected_frames,
+                            )
+                        videos_dir = os.path.join(project_root, "videos")
+                        os.makedirs(videos_dir, exist_ok=True)
+                        mp4_path = os.path.join(
+                            videos_dir, f"ppo_eval_{collected_frames}.mp4"
+                        )
+                        save_rgb_mp4(frames, mp4_path, fps=20)
+                        torchrl_logger.info(f"Saved eval video: {mp4_path}")
+                except Exception as e:
+                    torchrl_logger.warning(f"Eval video export failed: {e}")
 
             # Save checkpoint at eval
             ckpt_path = os.path.join(checkpoint_dir, f"ppo_eval_{collected_frames}.pt")
-            torch.save({
-                "actor_state_dict": actor.state_dict(),
-                "critic_state_dict": critic.state_dict(),
-                "collected_frames": collected_frames,
-                "config": dict(cfg),
-            }, ckpt_path)
+            torch.save(
+                {
+                    "actor_state_dict": actor.state_dict(),
+                    "critic_state_dict": critic.state_dict(),
+                    "collected_frames": collected_frames,
+                    "config": dict(cfg),
+                },
+                ckpt_path,
+            )
             torchrl_logger.info(f"Saved checkpoint: {ckpt_path}")
 
         if logger is not None:
@@ -361,17 +368,18 @@ def main(cfg: "DictConfig"):  # noqa: F821
 
     # Save final checkpoint
     final_ckpt_path = os.path.join(checkpoint_dir, "ppo_final.pt")
-    torch.save({
-        "actor_state_dict": actor.state_dict(),
-        "critic_state_dict": critic.state_dict(),
-        "collected_frames": collected_frames,
-        "config": dict(cfg),
-    }, final_ckpt_path)
+    torch.save(
+        {
+            "actor_state_dict": actor.state_dict(),
+            "critic_state_dict": critic.state_dict(),
+            "collected_frames": collected_frames,
+            "config": dict(cfg),
+        },
+        final_ckpt_path,
+    )
     torchrl_logger.info(f"Saved final checkpoint: {final_ckpt_path}")
 
     # Cleanup
-    if render_env is not None and not render_env.is_closed:
-        render_env.close()
     if not eval_env.is_closed:
         eval_env.close()
     if not train_env.is_closed:

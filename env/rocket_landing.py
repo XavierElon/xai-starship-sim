@@ -16,7 +16,6 @@ from env.config import (
 )
 from env.rewards import RewardCalculator, RewardComponents
 
-
 DEFAULT_CAMERA_CONFIG = {
     "elevation": -20,
     "distance": 100,
@@ -192,7 +191,11 @@ class RocketLander(MujocoEnv):
         Returns:
             The current curriculum height, or the default initial height from XML.
         """
-        return self._curriculum_height if self._curriculum_height is not None else self.init_qpos[2]
+        return (
+            self._curriculum_height
+            if self._curriculum_height is not None
+            else self.init_qpos[2]
+        )
 
     def _apply_domain_randomization(self):
         """Apply domain randomization to model parameters."""
@@ -209,7 +212,9 @@ class RocketLander(MujocoEnv):
         self.model.actuator_gear[:] = self._original_gear * thrust_factor
 
         # Randomize gravity
-        gravity_magnitude = self.np_random.uniform(dr.gravity_range[0], dr.gravity_range[1])
+        gravity_magnitude = self.np_random.uniform(
+            dr.gravity_range[0], dr.gravity_range[1]
+        )
         self.model.opt.gravity[2] = -gravity_magnitude
 
     def _get_randomized_initial_state(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -373,25 +378,39 @@ class RocketLander(MujocoEnv):
     def _compute_done(self, state, pre_step_vel_mag=None):
         design_config = self.config.get_design_config()
         (
-            pos_x, pos_y, pos_z,
-            roll, pitch, yaw,
-            vel_x, vel_y, vel_z,
-            angular_vel_x, angular_vel_y, angular_vel_z,
+            pos_x,
+            pos_y,
+            pos_z,
+            roll,
+            pitch,
+            yaw,
+            vel_x,
+            vel_y,
+            vel_z,
+            angular_vel_x,
+            angular_vel_y,
+            angular_vel_z,
         ) = state
 
         max_angle = self.config.max_angle
         max_distance = self.config.max_distance
         horizontal_distance = np.sqrt(pos_x**2 + pos_y**2)
         # Use pre-step velocity to prevent exploiting MuJoCo contact absorption
-        vel_mag = pre_step_vel_mag if pre_step_vel_mag is not None else np.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
+        vel_mag = (
+            pre_step_vel_mag
+            if pre_step_vel_mag is not None
+            else np.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
+        )
 
         # Failure conditions
         if pos_z < 0.5:
             # Check for success first (soft touchdown overrides crash)
-            if (horizontal_distance < 2.0
-                    and vel_mag < 1.0
-                    and abs(roll) < 15.0
-                    and abs(pitch) < 15.0):
+            if (
+                horizontal_distance < 2.0
+                and vel_mag < 1.0
+                and abs(roll) < 15.0
+                and abs(pitch) < 15.0
+            ):
                 return True, 1  # Success
             return True, 2  # Crash
 
@@ -406,12 +425,14 @@ class RocketLander(MujocoEnv):
 
         # Also check success near ground (above crash threshold)
         target_height = design_config.target_height
-        if (pos_z < target_height + 0.05
-                and pos_z >= 0.5
-                and horizontal_distance < 2.0
-                and vel_mag < 1.0
-                and abs(roll) < 15.0
-                and abs(pitch) < 15.0):
+        if (
+            pos_z < target_height + 0.05
+            and pos_z >= 0.5
+            and horizontal_distance < 2.0
+            and vel_mag < 1.0
+            and abs(roll) < 15.0
+            and abs(pitch) < 15.0
+        ):
             return True, 1  # Success
 
         return False, 0

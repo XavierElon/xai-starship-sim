@@ -154,15 +154,21 @@ class RocketLanderWarp(EnvBase):
 
         # Store initial qpos for resets
         mjd = mujoco.MjData(self._mjm)
-        self._init_qpos = torch.tensor(mjd.qpos.copy(), dtype=torch.float32, device=self._device)
-        self._init_qvel = torch.tensor(mjd.qvel.copy(), dtype=torch.float32, device=self._device)
+        self._init_qpos = torch.tensor(
+            mjd.qpos.copy(), dtype=torch.float32, device=self._device
+        )
+        self._init_qvel = torch.tensor(
+            mjd.qvel.copy(), dtype=torch.float32, device=self._device
+        )
 
         # Step counter per environment
         self._step_count = torch.zeros(num_envs, dtype=torch.int32, device=self._device)
 
         # Velocity history for approach speed tracking (max over last N steps)
         self._vel_history_len = 10
-        self._vel_history = torch.zeros(num_envs, self._vel_history_len, device=self._device)
+        self._vel_history = torch.zeros(
+            num_envs, self._vel_history_len, device=self._device
+        )
         self._vel_history_idx = 0
 
         # Capture CUDA graph for fast stepping
@@ -186,23 +192,37 @@ class RocketLanderWarp(EnvBase):
     def _make_spec(self, td_params=None):
         """Define observation, action, reward, and done specs."""
         self.observation_spec = Composite(
-            observation=Unbounded(shape=(self._num_envs, 12), dtype=torch.float32, device=self._device),
+            observation=Unbounded(
+                shape=(self._num_envs, 12), dtype=torch.float32, device=self._device
+            ),
             shape=(self._num_envs,),
         )
         self.action_spec = Composite(
             action=Bounded(
-                low=torch.tensor([-1.0, -1.0, 0.0], device=self._device).expand(self._num_envs, -1),
-                high=torch.tensor([1.0, 1.0, 1.0], device=self._device).expand(self._num_envs, -1),
+                low=torch.tensor([-1.0, -1.0, 0.0], device=self._device).expand(
+                    self._num_envs, -1
+                ),
+                high=torch.tensor([1.0, 1.0, 1.0], device=self._device).expand(
+                    self._num_envs, -1
+                ),
                 dtype=torch.float32,
                 device=self._device,
             ),
             shape=(self._num_envs,),
         )
-        self.reward_spec = Unbounded(shape=(self._num_envs, 1), dtype=torch.float32, device=self._device)
+        self.reward_spec = Unbounded(
+            shape=(self._num_envs, 1), dtype=torch.float32, device=self._device
+        )
         self.done_spec = Composite(
-            done=Unbounded(shape=(self._num_envs, 1), dtype=torch.bool, device=self._device),
-            terminated=Unbounded(shape=(self._num_envs, 1), dtype=torch.bool, device=self._device),
-            truncated=Unbounded(shape=(self._num_envs, 1), dtype=torch.bool, device=self._device),
+            done=Unbounded(
+                shape=(self._num_envs, 1), dtype=torch.bool, device=self._device
+            ),
+            terminated=Unbounded(
+                shape=(self._num_envs, 1), dtype=torch.bool, device=self._device
+            ),
+            truncated=Unbounded(
+                shape=(self._num_envs, 1), dtype=torch.bool, device=self._device
+            ),
             shape=(self._num_envs,),
         )
 
@@ -217,12 +237,15 @@ class RocketLanderWarp(EnvBase):
         """
         w1, x1, y1, z1 = q1.unbind(-1)
         w2, x2, y2, z2 = q2.unbind(-1)
-        return torch.stack([
-            w1*w2 - x1*x2 - y1*y2 - z1*z2,
-            w1*x2 + x1*w2 + y1*z2 - z1*y2,
-            w1*y2 - x1*z2 + y1*w2 + z1*x2,
-            w1*z2 + x1*y2 - y1*x2 + z1*w2,
-        ], dim=-1)
+        return torch.stack(
+            [
+                w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+                w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+                w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+                w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+            ],
+            dim=-1,
+        )
 
     def _build_obs(self, qpos, qvel):
         """Build batched 12-dim observations from qpos/qvel tensors.
@@ -244,7 +267,9 @@ class RocketLanderWarp(EnvBase):
 
         return torch.cat([pos, euler, vel, angular_vel], dim=-1)  # [N, 12]
 
-    def _compute_reward(self, obs, done_mask, crash_type, pre_step_vel=None, max_recent_vel=None):
+    def _compute_reward(
+        self, obs, done_mask, crash_type, pre_step_vel=None, max_recent_vel=None
+    ):
         """Compute batched rewards using exponential shaping.
 
         All per-step components are in [0, 1] via exp(-k * x), so longer
@@ -265,13 +290,15 @@ class RocketLanderWarp(EnvBase):
         ang_x, ang_y, ang_z = obs[:, 9], obs[:, 10], obs[:, 11]
 
         # Distance to target (3D)
-        dist_3d = torch.sqrt(pos_x**2 + pos_y**2 + (pos_z - self._target_height)**2)
+        dist_3d = torch.sqrt(pos_x**2 + pos_y**2 + (pos_z - self._target_height) ** 2)
         r_distance = torch.exp(-0.05 * dist_3d)
 
         # Velocity penalty: safe speed depends on altitude
         # At high altitude: allow fast descent. Near ground: must be slow.
         vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
-        safe_vel = 1.0 + pos_z * 0.4  # At z=50m: 21 m/s ok. At z=2m: 1.8 m/s. At z=0: 1 m/s
+        safe_vel = (
+            1.0 + pos_z * 0.4
+        )  # At z=50m: 21 m/s ok. At z=2m: 1.8 m/s. At z=0: 1 m/s
         excess_vel = torch.clamp(vel_mag - safe_vel, min=0.0)
         r_velocity = torch.exp(-self._vel_penalty_coeff * excess_vel)
 
@@ -307,7 +334,10 @@ class RocketLanderWarp(EnvBase):
         reward = reward + success_mask * self._w["success"] * r_soft
 
         reward = reward + (crash_type == 2).float() * self._w["crash"]
-        reward = reward + ((crash_type == 3) | (crash_type == 4)).float() * self._w["tipover"]
+        reward = (
+            reward
+            + ((crash_type == 3) | (crash_type == 4)).float() * self._w["tipover"]
+        )
 
         return reward.unsqueeze(-1)
 
@@ -334,9 +364,15 @@ class RocketLanderWarp(EnvBase):
         crashed = pos_z < 0.5
 
         crash_type = torch.where(oob, torch.tensor(5, device=self._device), crash_type)
-        crash_type = torch.where(pitch_over, torch.tensor(4, device=self._device), crash_type)
-        crash_type = torch.where(roll_over, torch.tensor(3, device=self._device), crash_type)
-        crash_type = torch.where(crashed, torch.tensor(2, device=self._device), crash_type)
+        crash_type = torch.where(
+            pitch_over, torch.tensor(4, device=self._device), crash_type
+        )
+        crash_type = torch.where(
+            roll_over, torch.tensor(3, device=self._device), crash_type
+        )
+        crash_type = torch.where(
+            crashed, torch.tensor(2, device=self._device), crash_type
+        )
 
         # Hard-landing crash: near surface + pre-step velocity too high
         if pre_step_vel is not None:
@@ -345,7 +381,9 @@ class RocketLanderWarp(EnvBase):
             pre_vel_mag = torch.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
         near_surface = pos_z < (self._target_height + 0.5)
         hard_landing = near_surface & (pre_vel_mag > self._crash_velocity)
-        crash_type = torch.where(hard_landing, torch.tensor(2, device=self._device), crash_type)
+        crash_type = torch.where(
+            hard_landing, torch.tensor(2, device=self._device), crash_type
+        )
 
         # Success condition (highest priority — overrides crash when rocket touches down softly)
         near_ground = pos_z < (self._target_height + 0.1)
@@ -354,7 +392,9 @@ class RocketLanderWarp(EnvBase):
         slow = pre_vel_mag < 1.0
         upright = (roll.abs() < 15.0) & (pitch.abs() < 15.0)
         success = near_ground & above_crash & near_pad & slow & upright
-        crash_type = torch.where(success, torch.tensor(1, device=self._device), crash_type)
+        crash_type = torch.where(
+            success, torch.tensor(1, device=self._device), crash_type
+        )
 
         terminated = crash_type > 0
         truncated = self._step_count >= self._max_episode_steps
@@ -392,20 +432,25 @@ class RocketLanderWarp(EnvBase):
         new_qpos = init_qpos.clone()
 
         # Add xy position noise (start offset from target)
-        new_qpos[:, 0] += torch.randn(self._num_envs, device=self._device) * self._reset_pos_noise
-        new_qpos[:, 1] += torch.randn(self._num_envs, device=self._device) * self._reset_pos_noise
+        new_qpos[:, 0] += (
+            torch.randn(self._num_envs, device=self._device) * self._reset_pos_noise
+        )
+        new_qpos[:, 1] += (
+            torch.randn(self._num_envs, device=self._device) * self._reset_pos_noise
+        )
         # Set height to starting height (no noise on z)
         new_qpos[:, 2] = self._starting_height
 
         # Add angular noise via small euler perturbation to quaternion
         # Generate small random euler angles and convert to quaternion perturbation
-        ang_noise = torch.randn(self._num_envs, 3, device=self._device) * self._reset_ang_noise
+        ang_noise = (
+            torch.randn(self._num_envs, 3, device=self._device) * self._reset_ang_noise
+        )
         # Simple axis-angle to quaternion for small angles: q ≈ [1, θ/2]
         half_ang = ang_noise * 0.5
-        noise_quat = torch.cat([
-            torch.ones(self._num_envs, 1, device=self._device),
-            half_ang
-        ], dim=-1)
+        noise_quat = torch.cat(
+            [torch.ones(self._num_envs, 1, device=self._device), half_ang], dim=-1
+        )
         noise_quat = torch.nn.functional.normalize(noise_quat, dim=-1)
         # Quaternion multiply: q_new = q_noise * q_init (apply perturbation)
         q0 = new_qpos[:, 3:7]
@@ -414,8 +459,13 @@ class RocketLanderWarp(EnvBase):
 
         # Reset qvel with separate linear and angular noise
         new_qvel = torch.zeros_like(qvel)
-        new_qvel[:, :3] = torch.randn(self._num_envs, 3, device=self._device) * self._reset_vel_noise
-        new_qvel[:, 3:6] = torch.randn(self._num_envs, 3, device=self._device) * self._reset_angvel_noise
+        new_qvel[:, :3] = (
+            torch.randn(self._num_envs, 3, device=self._device) * self._reset_vel_noise
+        )
+        new_qvel[:, 3:6] = (
+            torch.randn(self._num_envs, 3, device=self._device)
+            * self._reset_angvel_noise
+        )
 
         # Apply only to masked environments
         qpos[env_mask] = new_qpos[env_mask]
@@ -454,11 +504,19 @@ class RocketLanderWarp(EnvBase):
         obs = self._build_obs(qpos, qvel)
 
         # Compute termination
-        terminated, truncated, crash_type = self._compute_done(obs, pre_step_vel=pre_step_vel)
+        terminated, truncated, crash_type = self._compute_done(
+            obs, pre_step_vel=pre_step_vel
+        )
         done = terminated | truncated
 
         # Compute reward (pass max recent velocity for landing quality bonus)
-        reward = self._compute_reward(obs, done, crash_type, pre_step_vel=pre_step_vel, max_recent_vel=max_recent_vel)
+        reward = self._compute_reward(
+            obs,
+            done,
+            crash_type,
+            pre_step_vel=pre_step_vel,
+            max_recent_vel=max_recent_vel,
+        )
 
         # Auto-reset done environments
         self._reset_envs(done)
@@ -504,9 +562,15 @@ class RocketLanderWarp(EnvBase):
         return TensorDict(
             {
                 "observation": obs,
-                "done": torch.zeros(self._num_envs, 1, dtype=torch.bool, device=self._device),
-                "terminated": torch.zeros(self._num_envs, 1, dtype=torch.bool, device=self._device),
-                "truncated": torch.zeros(self._num_envs, 1, dtype=torch.bool, device=self._device),
+                "done": torch.zeros(
+                    self._num_envs, 1, dtype=torch.bool, device=self._device
+                ),
+                "terminated": torch.zeros(
+                    self._num_envs, 1, dtype=torch.bool, device=self._device
+                ),
+                "truncated": torch.zeros(
+                    self._num_envs, 1, dtype=torch.bool, device=self._device
+                ),
             },
             batch_size=self.batch_size,
             device=self._device,

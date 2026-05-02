@@ -21,6 +21,7 @@ class CurriculumConfig:
 @dataclass
 class RocketDesignConfig:
     """Configuration for a specific rocket design."""
+
     xml_file: str
     target_height: float  # Varies by leg design
     name: str
@@ -42,6 +43,7 @@ class DomainRandomizationConfig:
     Default values are tight for stable early training.
     Widen ranges gradually for robustness after initial convergence.
     """
+
     enabled: bool = False
     mass_range: Tuple[float, float] = (0.95, 1.05)  # ±5% mass variation
     thrust_range: Tuple[float, float] = (0.95, 1.05)  # ±5% thrust variation
@@ -57,6 +59,7 @@ class RewardWeights:
 
     Exponential shaping: all per-step components in [0, 1], weights sum to 1.0.
     """
+
     distance: float = 0.7
     velocity: float = 0.15
     upright: float = 0.1
@@ -69,6 +72,7 @@ class RewardWeights:
 @dataclass
 class RocketEnvConfig:
     """Main configuration for the RocketLander environment."""
+
     design: str = "v0"
     domain_randomization: DomainRandomizationConfig = field(
         default_factory=DomainRandomizationConfig
